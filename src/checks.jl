@@ -1,15 +1,5 @@
 # Checking gradients and Hessian vector products
 
-function check_single_grad(loss::Function, grad!::Function, datapoint::Vector, theta::Vector, lambda::Float64, eps::Float64)
-  p = length(theta)
-  delta = randn(p)
-  deriv_approx = (loss(datapoint, theta+eps*delta, lambda) - loss(datapoint, theta-eps*delta, lambda))/(2*eps)
-  grad = zeros(p)
-  grad!(datapoint, theta, lambda, grad)
-  deriv_exact = dot(grad, delta)
-  return norm(deriv_approx - deriv_exact)
-end
-
 function check_grad(loss::Function, grad!::Function, data::Matrix, theta::Vector, lambda::Float64, eps::Float64)
   n = size(data, 2)
   p = length(theta)
@@ -52,29 +42,12 @@ function check_hvp(grad!::Function, hvp!::Function, data::Matrix, theta::Vector,
   return norm(hvp_exact - hvp_approx)
 end
 
-function check_single_hvp(grad!::Function, hvp!::Function, datapoint::Vector, theta::Vector, lambda::Float64, eps::Float64)
-  p = length(theta)
-  delta = randn(p)
-  hvp_exact = zeros(p)
-  hvp!(datapoint, theta, delta, lambda, hvp_exact)
-  hvp_approx = (single_grad(grad!, datapoint, theta+eps*delta, lambda) - single_grad(grad!, datapoint, theta-eps*delta, lambda))/(2*eps)
-  return norm(hvp_exact - hvp_approx)
-end
-
 function ad_hoc_check()
   println("Checking gradients and hessian vector products")
 
-  # This creates a 100-point random data matrix with 99 independent variables
+  # This creates a 100-point random data matrix with 99 independent variables; set the last row of the data matrix (the class) to a random value 
   data = randn(100, 100)
-
-  # Mode is always svm in this implementation. As a result, the last row of the data matrix (the class) is randomly assigned 
- # if mode == "svm"
-    data[100,:] = 2.0*randbool(100) - 1
- # end
-  # This is unused
-#  if mode == "logistic regression"
-#    data[100,:] = 2.0*randbool(100) - 1
-#  end
+  data[100,:] = 2.0*randbool(100) - 1
 
   # Set the theta value, then compute the gradient and hessian norms
   theta = randn(99)
