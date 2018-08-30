@@ -2,6 +2,8 @@
 
 println("Loading SVM module")
 
+# Data matrix rows consist of rows of independent variables with last entry being dependent variable
+
 function loss(data::Matrix, theta::Vector, lambda::Float64)
   result = 0.0
   n = size(data, 2)
