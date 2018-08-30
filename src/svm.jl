@@ -1,5 +1,6 @@
-# Loss function, gradients and hessian vector products for SVMs with quadratic loss
+require("checks.jl")
 
+# Loss function, gradients and hessian vector products for SVMs with quadratic loss
 println("Loading SVM module")
 
 # Data matrix rows consist of rows of independent variables with last entry being dependent variable
@@ -38,5 +39,5 @@ function hvp!(datapoint::Vector, theta::Vector, v::Vector, lambda::Float64, resu
   end
 end
 
-require("checks.jl")
-ad_hoc_check("svm")
+# Checks to see if the function definitions are correct
+ad_hoc_check()

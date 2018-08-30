@@ -61,20 +61,29 @@ function check_single_hvp(grad!::Function, hvp!::Function, datapoint::Vector, th
   return norm(hvp_exact - hvp_approx)
 end
 
-function ad_hoc_check(mode::String)
+function ad_hoc_check()
   println("Checking gradients and hessian vector products")
+
+  # This creates a 100-point random data matrix with 99 independent variables
   data = randn(100, 100)
-  if mode == "svm"
+
+  # Mode is always svm in this implementation. As a result, the last row of the data matrix (the class) is randomly assigned 
+ # if mode == "svm"
     data[100,:] = 2.0*randbool(100) - 1
-  end
-  if mode == "logistic regression"
-    data[100,:] = 2.0*randbool(100) - 1
-  end
+ # end
+  # This is unused
+#  if mode == "logistic regression"
+#    data[100,:] = 2.0*randbool(100) - 1
+#  end
+
+  # Set the theta value, then compute the gradient and hessian norms
   theta = randn(99)
   gnorm = norm(check_grad(loss, grad!, data, theta, 1e-3, 1e-4))
   hnorm = norm(check_hvp(grad!, hvp!, data, theta, 1e-3, 1e-4))
-  println(gnorm)
+  
+  # Ensure that the gradient and hessian norms are below expected error bounds
+  println("Gradient Norm: ", gnorm)
   @assert gnorm <= 1e-4
-  println(hnorm)
+  println("Hessian Norm: ", hnorm)
   @assert hnorm <= 1e-4
 end
