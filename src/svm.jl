@@ -1,17 +1,20 @@
 # Loss function, gradients and hessian vector products for SVMs with quadratic loss
 println("Loading SVM module")
 
-# Data matrix rows consist of rows of independent variables with last entry being dependent variable
+# Data matrix columns consist of independent variables with last entry being dependent variable
+# Theta is current set of parameters
+# Lambda is the regularization parameter
 function loss(data::Matrix, theta::Vector, lambda::Float64)
-  result = 0.0
-  n = size(data, 2)
+  likelihood = 0.0
+  n = size(data, 2)				# Size of dataset. Given by number of columns
   for i = 1:n
     x = data[1:end-1,i]
-    y = data[end,i]
-    result += 0.5 * max(0.0, 1 - y * dot(vec(x), theta))^2/n
+    y = data[end,i]				# Last entry in column is observed value to be predicted
+ 	# Likelihood = [1/(2*n) * sum_i max(0, 1-y*X.T)^2] + L/2*T^2
+    likelihood += 0.5 * max(0.0, 1 - y * dot(vec(x), theta))^2/n
   end
-  result += lambda/2 * dot(theta, theta)
-  return result
+  likelihood += lambda/2 * dot(theta, theta)		# Regularizer. Not re-scaled to data-depth when using stochastic sampling?
+  return likelihood
 end
 
 function grad!(datapoint::Vector, theta::Vector, lambda::Float64, grad::Vector)
@@ -19,21 +22,22 @@ function grad!(datapoint::Vector, theta::Vector, lambda::Float64, grad::Vector)
   y = datapoint[end]
   alpha = dot(x, theta)
   if y * alpha < 1.0
+  	# grad = grad + LT - (1-y*X.T)*y*X 
     BLAS.axpy!(1.0, lambda * theta -  (1 - y*alpha) * y * x, grad)
   else
+  	# grad = grad + LT
     BLAS.axpy!(1.0, lambda * theta, grad)
   end
-end
+ end
 
-function hvp!(datapoint::Vector, theta::Vector, v::Vector, lambda::Float64, result::Vector)
-  x = datapoint[1:end-1]
-  y = datapoint[end]
-  alpha = dot(x, theta)
-  if y * alpha < 1.0
-    BLAS.axpy!(1.0, x * dot(x, v) + lambda * v, result)
-  else
-    BLAS.axpy!(1.0, lambda * v, result)
+# Compute the full gradient over the whole data matrix; calls grad! from above
+function full_grad(grad!::Function, data::Matrix, theta::Vector, lambda::Float64)
+  n = size(data, 2)						# Size of dataset. Given by the number of columns
+  dLikelihood = zeros(length(theta))	# Total gradient
+  for i = 1:n
+    grad!(vec(data[:,i]), theta, lambda, dLikelihood)
   end
+  return dLikelihood
 end
 
 # Functions to check gradient and Hessian vector products
@@ -50,14 +54,15 @@ function check_grad(loss::Function, grad!::Function, data::Matrix, theta::Vector
   return norm(deriv_approx - deriv_exact)
 end
 
-# Compute the full gradient over the whole data matrix
-function full_grad(grad!::Function, data::Matrix, theta::Vector, lambda::Float64)
-  n = size(data, 2)
-  result = zeros(length(theta))
-  for i = 1:n
-    grad!(vec(data[:,i]), theta, lambda, result)
+function hvp!(datapoint::Vector, theta::Vector, v::Vector, lambda::Float64, result::Vector)
+  x = datapoint[1:end-1]
+  y = datapoint[end]
+  alpha = dot(x, theta)
+  if y * alpha < 1.0
+    BLAS.axpy!(1.0, x * dot(x, v) + lambda * v, result)
+  else
+    BLAS.axpy!(1.0, lambda * v, result)
   end
-  return result
 end
 
 # plase check with check_gradient if the gradient function is correct before you use this function

@@ -83,7 +83,10 @@ function do_experiment(config::Dict)
   end
   srand(config["seed"])
 
-  require(config["exp"])
+#  require(config["exp"])
+
+require("svm.jl")
+require("adult.jl")
 
   h5open(config["hdf"], "w") do hdf
       params = g_create(hdf, "params")

@@ -43,10 +43,6 @@ end
 dataset = :adult
 
 df = readtable("adult.data")
-# df = readtable("census-income.data")
-
-# complete_cases!(df)
-
 X = featurize(df[1:end-1])
 y = class(df[end])
 
@@ -59,6 +55,7 @@ num_features = size(X, 2)
 
 data = data'
 
+# Theta is random seed?
 theta = randn(num_features)
 
 lambda = 0.001
