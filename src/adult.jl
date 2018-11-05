@@ -42,6 +42,7 @@ end
 
 dataset = :adult
 
+# Reads in the data
 df = readtable("adult.data")
 X = featurize(df[1:end-1])
 y = class(df[end])
@@ -57,7 +58,7 @@ data = data'
 
 # Theta is random seed?
 theta = randn(num_features)
-
+# This is just setting the regularization
 lambda = 0.001
 
 function func(x::Vector)
