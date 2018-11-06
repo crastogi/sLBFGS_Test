@@ -40,33 +40,35 @@ function class(column)
   return result
 end
 
+##################
+### Parse Data ###
+##################
 df = readtable("adult.data")	# Read in the data (uses function from DataFrames package)
+df = df[1:10000,:]				# Truncate to the first 10,000 entries
 X = featurize(df[1:end-1])		# Featurize all but the last column of the data from above
 y = class(df[end])				# Turn all the last column into class labels
+data = cat(2, X, y)				# Create the 'data' matrix by pasting the X and Y values together (cbind in R)
+data = data'					# Transpose the data (for what reason I do not know)
 
-X = X[1:10000,:]
-y = y[1:10000,:]
-
-data = cat(2, X, y)
-
-num_features = size(X, 2)
-
-data = data'
-
-# Theta is random seed?
-theta = randn(num_features)
-# This is just setting the regularization
+##################
+### Test Optim ###
+##################
+# Set the regularization value (lambda) and create a random seed for the parameters (theta)
 lambda = 0.001
+theta = randn(size(X, 2))		# Parameter vector equal to the number of columns of the data matrix
 
+# Create wrapper functions so that the generic lbfgs optimizer from Optim can use the svm functions (which have already been loaded at this point)
+# Likelihood function wrapper
 function func(x::Vector)
   return loss(data, x, lambda)
 end
-
+# Gradient function wrapper
 function gradient!(x::Vector, storage::Vector)
+  # Need to copy the return value of full_grad (a vector) into the function-provided vector (storage) for the canned optimize routine below
   copy!(storage, full_grad(grad!, data, x, lambda))
 end
 
 # This uses standard L-BFGS to compute the minimum using the optimize package
 res = optimize(func, gradient!, theta, method = :l_bfgs, show_trace=true, grtol=1e-5)
-
+# Create some sort of dictionary information to store the optimal (theta star) in some HDF5 file
 dataset_info = ["name" => "UCI", "theta_star" => res.minimum]
