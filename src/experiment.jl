@@ -78,13 +78,16 @@ end
 
 # This actually runs the experiment, and is called below
 function do_experiment(config::Dict)
+  # Sets the seed if it does not exist
   if config["seed"] == -1
     config["seed"] = time_ns()
   end
   srand(config["seed"])
 
 # require(config["exp"])
+  # This loads the model (an SVM), consisting of the function, gradient, and HVP methods
   require("svm.jl")
+  # This loads and processes the data into a format that can be used by the methods here
   require("adult.jl")
 
   h5open(config["hdf"], "w") do hdf

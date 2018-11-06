@@ -40,12 +40,9 @@ function class(column)
   return result
 end
 
-dataset = :adult
-
-# Reads in the data
-df = readtable("adult.data")
-X = featurize(df[1:end-1])
-y = class(df[end])
+df = readtable("adult.data")	# Read in the data (uses function from DataFrames package)
+X = featurize(df[1:end-1])		# Featurize all but the last column of the data from above
+y = class(df[end])				# Turn all the last column into class labels
 
 X = X[1:10000,:]
 y = y[1:10000,:]
@@ -69,6 +66,7 @@ function gradient!(x::Vector, storage::Vector)
   copy!(storage, full_grad(grad!, data, x, lambda))
 end
 
+# This uses standard L-BFGS to compute the minimum using the optimize package
 res = optimize(func, gradient!, theta, method = :l_bfgs, show_trace=true, grtol=1e-5)
 
 dataset_info = ["name" => "UCI", "theta_star" => res.minimum]
