@@ -1,19 +1,21 @@
 using Optim
 using DataFrames
 
+# Featurize categorical variables
+function onehot(column::DataArray)
+  categories = unique(column)
+  p = length(categories)
+  n = size(column, 1)
+  result = zeros(n, p)
+  for (i, x) in enumerate(column)
+    result[i,:] = eye(p)[:,findfirst(categories, x)]
+  end
+  return result
+end
+
+# Featurize categorical variables and unit-normalize numeric ones
 function featurize(df)
   X = zeros(size(df, 1), 0)
-  function onehot(column::DataArray)
-    categories = unique(column)
-    p = length(categories)
-    n = size(column, 1)
-    result = zeros(n, p)
-    for (i, x) in enumerate(column)
-      result[i,:] = eye(p)[:,findfirst(categories, x)]
-    end
-    return result
-  end
-
   for feature in names(df)
     column = df[feature]
     if eltype(column) <: Number
@@ -25,10 +27,14 @@ function featurize(df)
   return X
 end
 
+# Turns a vector into a 2 class system
 function class(column)
+  # Create an output vector the size of the input one
   result = zeros(length(column))
+  # Find (and ensure) that there are only 2 categories in the input vector
   categories = unique(column)
   @assert length(categories) == 2
+  # Traverses through vector and 
   for (i, x) in enumerate(column)
     if findfirst(categories, x) == 1
       result[i] = -1
