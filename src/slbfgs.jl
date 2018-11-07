@@ -35,44 +35,65 @@ end
 ########################################
 # This follows Algorithm 9.1 (Two Loop Recursion) in Nocedal Numerical Optimization.
 # It requires the InverseHessian Object and the current gradient, and the pseudo-hessian regularizer delta
-function mvp(self::InverseHessian, g::Vector{Float64}, delta::Float64)
+function mvp(H_r::InverseHessian, v_t::Vector{Float64}, delta::Float64)
   # Ensure that the Hessian update has some history in it
-  @assert length(self.syrhos) > 0
-  q = copy(g)
-  alphas = zeros(length(self.syrhos))
-  for (i, (s, y, rho)) in enumerate(reverse(collect(self.syrhos)))
+  m = length(H_r.syrhos)			# Memory size
+  @assert m > 0
+  # Clone the input gradient
+  q = copy(v_t)
+  # Create a vector of alphas with the right memory size
+  alphas = zeros(m)
+  # The first loop (starts from the latest entry and goes to the first)
+  for (i, (s, y, rho)) in enumerate(reverse(collect(H_r.syrhos)))
+  	# This computes and stores alpha_i = rho_i*s_i*q
     alpha = rho * dot(s, q)
-     alphas[length(self.syrhos) - i + 1] = alpha
-     q -= alpha * y
+    alphas[m - i + 1] = alpha			# Required for proper indexing
+    # Update q with q = q - alpha_i*y_i
+    q -= alpha * y
   end
-  (s, y, rho) = back(self.syrhos) # current iterate
+  # Now attempt to compute r. We need this for the last stored iterate
+  (s, y, rho) = back(H_r.syrhos)
+  # gamma_k = s_k*y_k/(y_k*y_k)
   gamma = dot(s, y)/dot(y, y)
-  r = gamma/(1 + delta*gamma)*q
-  for (i, (s, y, rho)) in enumerate(collect(self.syrhos)) # TODO: Remove collect overhead
+  # r = gamma_k*q/(1 + delta*gamma_k); the denominator includes the pseudo-hessian regularization parameter delta
+  # NOTE: There is no need to multiply by I here, as that will anyway produce a dot product 
+  r = gamma*q/(1 + delta*gamma)
+  # Second loop (goes in reverse, starting from the first entry)
+  for (i, (s, y, rho)) in enumerate(collect(H_r.syrhos))
+  	# beta = rho_i*y_i*r
     beta = rho * dot(y, r)
+    # r = r + s_i*(alpha_i-beta)
     r += s * (alphas[i] - beta)
   end
   return r
 end
 
 # Alternate function to test the two-loop recursion formula (Equation 4)
-function test_mvp(self::InverseHessian, g::Vector{Float64}, delta::Float64)
+function test_mvp(H_r::InverseHessian, v_t::Vector{Float64}, delta::Float64)
   # Find the latest set of s, y, and rho
-  syrhos = collect(self.syrhos)
+  syrhos = collect(H_r.syrhos)
   (s, y, rho) = syrhos[end]
   # Find the total number of parameters
   p = length(s)
+  # Compute gamma, which is s_r*y_r/(y_r*y_r)
   gamma = dot(s, y)/dot(y, y)
+  # Compute H_r^(r-M) = gamma*I. Here I is the identity matrix. Below, (1+delta*gamma) is 
+  # the correction factor incorporating the regularization of the pseudohessian
   H = gamma / (1 + delta*gamma) * eye(p)
+  # Loop over all history stored in the InverseHessian object
   for (s, y, rho) in syrhos
+  	# V_j = (I-rho_j*s_j*y_j)
     V = eye(p) - rho * y * s'
+    # H_j = V'_j*H_(j-1)*V_j + rho_j*s_j*s_j
     H = V' * H * V + rho * s * s'
   end
-  return H*g
+  # Compute H_r*v_t
+  return H*v_t
 end
 
-# Checks to see the following functionality: 1) that the InverseHessian object functions as needed;
-# 2) that the 'mvp' function behaves normally using the test_mvp function, therefore verifying that the 2 loop recursion works
+# Checks to see the following functionality: 1) that the InverseHessian object functions 
+# as needed; 2) that the 'mvp' function behaves normally using the test_mvp function, 
+# therefore verifying that the 2 loop recursion works
 function test_inverse_hessian()
   # Create object to store inverse hessian history with memory depth = 3
   self = InverseHessian(3)
@@ -89,7 +110,6 @@ function test_inverse_hessian()
   second = test_mvp(self, g, 0.0)
   @test norm(first - second) <= 1e-10
 end
-
 test_inverse_hessian()
 
 #########################
