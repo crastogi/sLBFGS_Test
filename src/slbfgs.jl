@@ -5,28 +5,28 @@ using ArrayViews
 #############################################
 ### Functions for storing Hessian Updates ###
 #############################################
-# This defines a data type that stores the history of s, y, and j, and memory size M (which is called tau in this code)
+# This defines a data type that stores the history of s, y, and j, and memory size M
 type InverseHessian
   # This is the structure that stores s, y, and rhos
   syrhos::Deque{(Vector{Float64}, Vector{Float64}, Float64)}
   # This stores memory depth M
-  tau::Int
+  M::Int
 end
 
-# This function is the Constructor? of the InverseHessian datatype. Requires the memory size to initialize 
-function InverseHessian(tau::Int)
-  return InverseHessian(Deque{(Vector{Float64}, Vector{Float64}, Float64)}(), tau)
+# This function is the Constructor of InverseHessian and requires memory size M 
+function InverseHessian(M::Int)
+  return InverseHessian(Deque{(Vector{Float64}, Vector{Float64}, Float64)}(), M)
 end
 
 # This function stores the current values of s and y, and computes and stores the current value of rho
-function add!(self::InverseHessian, s::Vector{Float64}, y::Vector{Float64})
+function add!(IH_hist::InverseHessian, s::Vector{Float64}, y::Vector{Float64})
   rho = 1./dot(s, y)						# This is the rho in lbfgs update: rho_j = 1/s_j^T*y_j
   # This adds the current values of s, y, and rho to the InverseHessian data structure
-  push!(self.syrhos, (s, y, rho))
+  push!(IH_hist.syrhos, (s, y, rho))
   # In case the memory depth has exceeded
-  if length(self.syrhos) > self.tau
+  if length(IH_hist.syrhos) > IH_hist.M
   	# Remove the earliest (in this case the first) item in the collection
-    shift!(self.syrhos)
+    shift!(IH_hist.syrhos)
   end
 end
 
@@ -35,16 +35,16 @@ end
 ########################################
 # This follows Algorithm 9.1 (Two Loop Recursion) in Nocedal Numerical Optimization.
 # It requires the InverseHessian Object and the current gradient, and the pseudo-hessian regularizer delta
-function mvp(H_r::InverseHessian, v_t::Vector{Float64}, delta::Float64)
+function mvp(IH_hist::InverseHessian, v_t::Vector{Float64}, delta::Float64)
   # Ensure that the Hessian update has some history in it
-  m = length(H_r.syrhos)			# Memory size
+  m = length(IH_hist.syrhos)			# Memory size
   @assert m > 0
   # Clone the input gradient
   q = copy(v_t)
   # Create a vector of alphas with the right memory size
   alphas = zeros(m)
   # The first loop (starts from the latest entry and goes to the first)
-  for (i, (s, y, rho)) in enumerate(reverse(collect(H_r.syrhos)))
+  for (i, (s, y, rho)) in enumerate(reverse(collect(IH_hist.syrhos)))
   	# This computes and stores alpha_i = rho_i*s_i*q
     alpha = rho * dot(s, q)
     alphas[m - i + 1] = alpha			# Required for proper indexing
@@ -52,14 +52,14 @@ function mvp(H_r::InverseHessian, v_t::Vector{Float64}, delta::Float64)
     q -= alpha * y
   end
   # Now attempt to compute r. We need this for the last stored iterate
-  (s, y, rho) = back(H_r.syrhos)
+  (s, y, rho) = back(IH_hist.syrhos)
   # gamma_k = s_k*y_k/(y_k*y_k)
   gamma = dot(s, y)/dot(y, y)
   # r = gamma_k*q/(1 + delta*gamma_k); the denominator includes the pseudo-hessian regularization parameter delta
   # NOTE: There is no need to multiply by I here, as that will anyway produce a dot product 
   r = gamma*q/(1 + delta*gamma)
   # Second loop (goes in reverse, starting from the first entry)
-  for (i, (s, y, rho)) in enumerate(collect(H_r.syrhos))
+  for (i, (s, y, rho)) in enumerate(collect(IH_hist.syrhos))
   	# beta = rho_i*y_i*r
     beta = rho * dot(y, r)
     # r = r + s_i*(alpha_i-beta)
@@ -69,15 +69,15 @@ function mvp(H_r::InverseHessian, v_t::Vector{Float64}, delta::Float64)
 end
 
 # Alternate function to test the two-loop recursion formula (Equation 4)
-function test_mvp(H_r::InverseHessian, v_t::Vector{Float64}, delta::Float64)
+function test_mvp(IH_hist::InverseHessian, v_t::Vector{Float64}, delta::Float64)
   # Find the latest set of s, y, and rho
-  syrhos = collect(H_r.syrhos)
+  syrhos = collect(IH_hist.syrhos)
   (s, y, rho) = syrhos[end]
   # Find the total number of parameters
   p = length(s)
   # Compute gamma, which is s_r*y_r/(y_r*y_r)
   gamma = dot(s, y)/dot(y, y)
-  # Compute H_r^(r-M) = gamma*I. Here I is the identity matrix. Below, (1+delta*gamma) is 
+  # Compute IH_hist^(r-M) = gamma*I. Here I is the identity matrix. Below, (1+delta*gamma) is 
   # the correction factor incorporating the regularization of the pseudohessian
   H = gamma / (1 + delta*gamma) * eye(p)
   # Loop over all history stored in the InverseHessian object
@@ -87,7 +87,7 @@ function test_mvp(H_r::InverseHessian, v_t::Vector{Float64}, delta::Float64)
     # H_j = V'_j*H_(j-1)*V_j + rho_j*s_j*s_j
     H = V' * H * V + rho * s * s'
   end
-  # Compute H_r*v_t
+  # Compute IH_hist*v_t
   return H*v_t
 end
 
@@ -117,44 +117,45 @@ test_inverse_hessian()
 #########################
 # S is the number of epochs
 function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, theta::Vector, config::Dict, diagnostics::HDF5Group)
-  tau = config["memory_size"]						# This is memory size M
+  ### FIXED CONSTANTS ###
+  M = config["memory_size"]							# This is memory size M
   delta = config["delta"]							# This is an optional Inverse Hessian regularization parameter 
   eta = config["stepsize"]							# Fixed step size parameter eta in x_t+1 = x_t - eta*H_r*v_t
-  S = config["epochs"]								# Number of epochs
-  verbose = true
-  println("===== running stochastic lbfgs =====\n")
-  println("iter | lbfgs error")
+  max_epoch = config["epochs"]						# Maximum number of epochs
+
   n = size(data, 1)
   m = 2*n
   p = length(theta)
-  H = InverseHessian(tau)
+  
+  ### RUNTIME VARIABLES ###
+  H = InverseHessian(M)
   thetaold = copy(theta)
   dtheta = zeros(p)
   mu = zeros(p)
   z = zeros(p)
   zold = zeros(p)
   P = zeros(p)
-
+  
   t = -1 # number of correction pairs currently computed
   stheta = zeros(p)
   sthetaold = zeros(p)
 
   hdf_loss = g_create(diagnostics, "loss")
   hdf_theta = g_create(diagnostics, "theta")
-
-  if config["use_gradient_step"]
+   if config["use_gradient_step"]
     println("warning: using gradient steps")
   end
 
-  # Loop over epochs (fixed)
-  for s in 1:S
+  # Header for verbose output
+  println("===== running stochastic lbfgs =====\n")
+  println("iter | lbfgs error")
+  # Loop over epochs (fixed termination at the end of max_epoch)
+  for s in 1:max_epoch
     # Print epoch number and likelihood at epoch as the result of the iteration 
-    if verbose
-      l = loss(data, theta, config["lambda"])
-      @printf "%4d | %9.4E \n" s l
-      hdf_loss[@sprintf "%04d" s] = l
-      hdf_theta[@sprintf "%04d" s] = theta
-    end
+    l = loss(data, theta, config["lambda"])
+    @printf "%4d | %9.4E \n" s l
+    hdf_loss[@sprintf "%04d" s] = l
+    hdf_theta[@sprintf "%04d" s] = theta
 	
 	# Need to clone theta (equivalent to x_0 = w_k, line 5)
     ctheta = copy(theta)
