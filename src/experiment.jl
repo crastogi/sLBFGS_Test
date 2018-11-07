@@ -98,11 +98,12 @@ function do_experiment(config::Dict)
   end
 end
 
-
-# Step 1: parse the arguments using parse_args, presumably from some package. parsed_args is a Dictionary containing key-value pairs which hold the arguments used to initialize the optimization
+####################
+### Runtime Code ###
+####################
+# Parse the arguments using parse_args, presumably from some package. parsed_args is a Dictionary containing key-value pairs which hold the arguments used to initialize the optimization
 parsed_args = parse_args(ARGS, s)
 # Then print the parsed arguments
 println(parsed_args)
-
 # Run the experiment by taking the parsed args and sending them off
 do_experiment(parsed_args)
