@@ -115,10 +115,10 @@ test_inverse_hessian()
 #########################
 ### sL-BFGS Main Loop ###
 #########################
-# S is the number of epochs
 function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, theta::Vector, config::Dict, diagnostics::HDF5Group)
   ### FIXED CONSTANTS ###
   M = config["memory_size"]							# This is memory size M
+  L = config["hess_period"]							# Number of iterations before the inverse hessian is updated
   delta = config["delta"]							# This is an optional Inverse Hessian regularization parameter 
   eta = config["stepsize"]							# Fixed step size parameter eta in x_t+1 = x_t - eta*H_r*v_t
   max_epoch = config["epochs"]						# Maximum number of epochs
@@ -128,12 +128,13 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
   p = length(theta)
   
   ### RUNTIME VARIABLES ###
-  H = InverseHessian(M)
+  v_t = zeros(p)
+  v_t_prev = zeros(p)
+  mu_k = zeros(p)
+  IH_hist = InverseHessian(M)
+  
   thetaold = copy(theta)
   dtheta = zeros(p)
-  mu = zeros(p)
-  z = zeros(p)
-  zold = zeros(p)
   P = zeros(p)
   
   t = -1 # number of correction pairs currently computed
@@ -142,9 +143,6 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
 
   hdf_loss = g_create(diagnostics, "loss")
   hdf_theta = g_create(diagnostics, "theta")
-   if config["use_gradient_step"]
-    println("warning: using gradient steps")
-  end
 
   # Header for verbose output
   println("===== running stochastic lbfgs =====\n")
@@ -161,42 +159,43 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
     ctheta = copy(theta)
     
 	# Next, compute full gradient for variance reduction (line 4)
-    # \tilde \mu = 1/n \sum \nabla f_i(\tilde theta)
-    fill!(mu, 0.0)				# Fill the variance-reduced gradient with zeros
+	# WARNING: It is possible that the variance reduction step here does not compute the gradient over the whole dataset
+    # \tilde \mu_k = 1/n \sum \nabla f_i(\tilde theta)
+    fill!(mu_k, 0.0)			# Fill the variance-reduced gradient with zeros
+	# Here n is the number of parameters + 1!!!!    
     for i = 1:n					# Compute variance-reduced gradient 
-      grad!(vec(data[:,i]), ctheta, config["lambda"], mu)
+      grad!(vec(data[:,i]), ctheta, config["lambda"], mu_k)
     end
-    mu /= n						# Normalize to unit likelihood
+    mu_k /= n					# Normalize to unit likelihood
     
     # ONLY for first epoch
     if s == 1
       # Do a gradient step to get LBFGS started
-      copy!(P, -mu/norm(mu))
+      copy!(P, -mu_k/norm(mu_k))
     end
     copy!(theta, ctheta)
     for k in 1:m
       index = rand(1:n)
-      copy!(zold, z)
-      fill!(z, 0.0)
-      # z_k = \nabla f_{i_k}(\theta) - \nabla f_{i_k}(\tilde\theta) + \tilde \mu
+      copy!(v_t_prev, v_t)
+      fill!(v_t, 0.0)
+      # z_k = \nabla f_{i_k}(\theta) - \nabla f_{i_k}(\tilde\theta) + \tilde \mu_k
       fill!(dtheta, 0.0)
       grad!(vec(data[:,index]), theta, config["lambda"], dtheta)
-      z += dtheta
+      v_t += dtheta
       fill!(dtheta, 0.0)
       grad!(vec(data[:,index]), ctheta, config["lambda"], dtheta)
-      if config["reduce_grad_var"]
-        z -= dtheta
-        z += mu
-      end
+
+	  # To compute the reduced variance gradient:
+      v_t += mu_k - dtheta
 
       stheta += theta
 
       if k > 1 # neccessary?
-        if mod(k, config["hess_period"]) == 0
-          stheta /= config["hess_period"]
+        if mod(k, L) == 0
+          stheta /= L
           t += 1
         end
-        if mod(k, config["hess_period"]) == 0 && t >= 1
+        if mod(k, L) == 0 && t >= 1
           svec = stheta - sthetaold
           r = zeros(p)
           if config["use_hvp"]
@@ -207,21 +206,22 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
             r /= config["hess_samples"]
           else
                 # delta a regularization parameter
-                r = z - zold + delta*svec
+                r = v_t - v_t_prev + delta*svec
             end
-            add!(H, svec, r)
+            add!(IH_hist, svec, r)
             copy!(sthetaold, stheta)
         end
         if t > 1
-          P = -eta * mvp(H, z, delta)
+          P = -eta * mvp(IH_hist, v_t, delta)
         else
-          P = -eta*z
+          P = -eta*v_t
         end
       end
+      
       # take step
       copy!(thetaold, theta)
       if config["use_gradient_step"]
-        theta -= eta*z
+        theta -= eta*v_t
       else
         theta += P
       end
