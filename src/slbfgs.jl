@@ -117,11 +117,15 @@ test_inverse_hessian()
 #########################
 function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, theta::Vector, config::Dict, diagnostics::HDF5Group)
   ### FIXED CONSTANTS ###
-  M = config["memory_size"]							# This is memory size M
-  L = config["hess_period"]							# Number of iterations before the inverse hessian is updated
-  delta = config["delta"]							# This is an optional Inverse Hessian regularization parameter 
-  eta = config["stepsize"]							# Fixed step size parameter eta in x_t+1 = x_t - eta*H_r*v_t
-  max_epoch = config["epochs"]						# Maximum number of epochs
+  L = config["hess_period"]					# Number of iterations before the inverse hessian is updated
+  M = config["memory_size"]					# This is memory size M
+  N = size(data, 2)							# Number of data points
+  b_H = config["hess_samples"]				# Batch size for stochastic Hessian samples
+  delta = config["delta"]					# This is an optional Inverse Hessian regularization parameter 
+  eta = config["stepsize"]					# Fixed step size parameter eta in x_t+1 = x_t - eta*H_r*v_t
+  max_epoch = config["epochs"]				# Maximum number of epochs
+
+  println("Number of datapoints: ",N)
 
   n = size(data, 1)
   m = 2*n
@@ -130,7 +134,7 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
   ### RUNTIME VARIABLES ###
   v_t = zeros(p)
   v_t_prev = zeros(p)
-  mu_k = zeros(p)
+  mu_k = zeros(p)							# Full Gradient for Variance-Reduced Gradient
   IH_hist = InverseHessian(M)
   
   thetaold = copy(theta)
@@ -147,7 +151,8 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
   # Header for verbose output
   println("===== running stochastic lbfgs =====\n")
   println("iter | lbfgs error")
-  # Loop over epochs (fixed termination at the end of max_epoch)
+  
+  # Loop over epochs (fixed termination at the end of max_epoch; line 3)
   for s in 1:max_epoch
     # Print epoch number and likelihood at epoch as the result of the iteration 
     l = loss(data, theta, config["lambda"])
@@ -159,14 +164,12 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
     ctheta = copy(theta)
     
 	# Next, compute full gradient for variance reduction (line 4)
-	# WARNING: It is possible that the variance reduction step here does not compute the gradient over the whole dataset
-    # \tilde \mu_k = 1/n \sum \nabla f_i(\tilde theta)
-    fill!(mu_k, 0.0)			# Fill the variance-reduced gradient with zeros
-	# Here n is the number of parameters + 1!!!!    
-    for i = 1:n					# Compute variance-reduced gradient 
+    # \mu_k = 1/N \sum_i^N \nabla f_i(w_k)
+    fill!(mu_k, 0.0)						# Fill the variance-reduced gradient with zeros  
+    for i = 1:N								# Compute variance-reduced gradient 
       grad!(vec(data[:,i]), ctheta, config["lambda"], mu_k)
     end
-    mu_k /= n					# Normalize to unit likelihood
+    mu_k /= N								# Normalize to unit likelihood
     
     # ONLY for first epoch
     if s == 1
@@ -174,6 +177,8 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
       copy!(P, -mu_k/norm(mu_k))
     end
     copy!(theta, ctheta)
+    
+    # Perform m iterations before a full gradient computation takes place (line 6)
     for k in 1:m
       index = rand(1:n)
       copy!(v_t_prev, v_t)
@@ -191,25 +196,25 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
       stheta += theta
 
       if k > 1 # neccessary?
+      	# Check to see if L iterations have passed (triggers hessian update; line 11)
         if mod(k, L) == 0
           stheta /= L
           t += 1
-        end
-        if mod(k, L) == 0 && t >= 1
-          svec = stheta - sthetaold
-          r = zeros(p)
-          if config["use_hvp"]
-            for i = 1:config["hess_samples"]
-              index = rand(1:n)
-              hvp!(vec(data[:,index]), stheta, svec, config["lambda"], r)
-            end
-            r /= config["hess_samples"]
-          else
-                # delta a regularization parameter
-                r = v_t - v_t_prev + delta*svec
+          if t >= 1
+            svec = stheta - sthetaold
+            r = zeros(p)
+            if config["use_hvp"]
+              for i = 1:b_H
+                index = rand(1:N)
+                hvp!(vec(data[:,index]), stheta, svec, config["lambda"], r)
+              end
+              r /= b_H
+            else
+              r = v_t - v_t_prev + delta*svec 		# delta a regularization parameter
             end
             add!(IH_hist, svec, r)
             copy!(sthetaold, stheta)
+          end
         end
         if t > 1
           P = -eta * mvp(IH_hist, v_t, delta)
