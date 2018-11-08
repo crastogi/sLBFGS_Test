@@ -135,8 +135,10 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
   mu_k = zeros(d)							# Full Gradient for Variance-Reduced Gradient
   IH_hist = InverseHessian(M)
   
+  grad_f_xt = zeros(d)
+  grad_f_wk = zeros(d)
+  
   thetaold = copy(theta)
-  dtheta = zeros(d)
   P = zeros(d)
   
   t = -1 # number of correction pairs currently computed
@@ -181,26 +183,20 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
       # z_k = \nabla f_{i_k}(x_t) - \nabla f_{i_k}(w_k) + \mu_k
       copy!(v_t_prev, v_t)
       
-      # Compute stochastic gradient estimate
-      fill!(v_t, 0.0)
-      fill!(dtheta, 0.0)
-      
-      # Sample a minibatch for S (line 7)
+      # Compute stochastic gradient estimate: begin by sampling a minibatch for S (line 7)
       index = sample(1:N, b, replace = false)
+      # Compute stochastic gradient grad_f_xt (line 8)
+      fill!(v_t, 0.0)
+      fill!(grad_f_xt, 0.0)
+      fill!(grad_f_wk, 0.0)
       for i in index
-		grad!(vec(data[:,i]), theta, config["lambda"], dtheta)
+		grad!(vec(data[:,i]), theta, config["lambda"], grad_f_xt)
+		grad!(vec(data[:,i]), ctheta, config["lambda"], grad_f_wk)
       end
-      dtheta /= b
-      v_t += dtheta
-      
-      fill!(dtheta, 0.0)
-      for i in index
-      	grad!(vec(data[:,i]), ctheta, config["lambda"], dtheta)
-	  end
-	  dtheta /= b
-
-	  # To compute the reduced variance gradient:
-      v_t += mu_k - dtheta
+      grad_f_xt /= b
+      grad_f_wk /= b
+	  # Compute the reduced variance gradient (line 9)
+      v_t += grad_f_xt - grad_f_wk + mu_k
 
       stheta += theta
 
