@@ -1,6 +1,7 @@
 @everywhere using DataStructures
 using Base.Test
 using ArrayViews
+using StatsBase
 
 #############################################
 ### Functions for storing Hessian Updates ###
@@ -119,31 +120,28 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
   ### FIXED CONSTANTS ###
   L = config["hess_period"]					# Number of iterations before the inverse hessian is updated
   M = config["memory_size"]					# This is memory size M
+  d = length(theta)							# Dimensionality
   N = size(data, 2)							# Number of data points
   b_H = config["hess_samples"]				# Batch size for stochastic Hessian samples
-  delta = config["delta"]					# This is an optional Inverse Hessian regularization parameter 
+  b = convert(Int, b_H/10)					# Batch size for stochastic gradient samples
+  m = convert(Int, ceil(N/b))				# Number of iterations to run per epoch
   eta = config["stepsize"]					# Fixed step size parameter eta in x_t+1 = x_t - eta*H_r*v_t
+  delta = config["delta"]					# This is an optional Inverse Hessian regularization parameter 
   max_epoch = config["epochs"]				# Maximum number of epochs
-
-  println("Number of datapoints: ",N)
-
-  n = size(data, 1)
-  m = 2*n
-  p = length(theta)
-  
+    
   ### RUNTIME VARIABLES ###
-  v_t = zeros(p)
-  v_t_prev = zeros(p)
-  mu_k = zeros(p)							# Full Gradient for Variance-Reduced Gradient
+  v_t = zeros(d)
+  v_t_prev = zeros(d)
+  mu_k = zeros(d)							# Full Gradient for Variance-Reduced Gradient
   IH_hist = InverseHessian(M)
   
   thetaold = copy(theta)
-  dtheta = zeros(p)
-  P = zeros(p)
+  dtheta = zeros(d)
+  P = zeros(d)
   
   t = -1 # number of correction pairs currently computed
-  stheta = zeros(p)
-  sthetaold = zeros(p)
+  stheta = zeros(d)
+  sthetaold = zeros(d)
 
   hdf_loss = g_create(diagnostics, "loss")
   hdf_theta = g_create(diagnostics, "theta")
@@ -180,15 +178,26 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
     
     # Perform m iterations before a full gradient computation takes place (line 6)
     for k in 1:m
-      index = rand(1:n)
+      # z_k = \nabla f_{i_k}(x_t) - \nabla f_{i_k}(w_k) + \mu_k
       copy!(v_t_prev, v_t)
+      
+      # Compute stochastic gradient estimate
       fill!(v_t, 0.0)
-      # z_k = \nabla f_{i_k}(\theta) - \nabla f_{i_k}(\tilde\theta) + \tilde \mu_k
       fill!(dtheta, 0.0)
-      grad!(vec(data[:,index]), theta, config["lambda"], dtheta)
+      
+      # Sample a minibatch for S (line 7)
+      index = sample(1:N, b, replace = false)
+      for i in index
+		grad!(vec(data[:,i]), theta, config["lambda"], dtheta)
+      end
+      dtheta /= b
       v_t += dtheta
+      
       fill!(dtheta, 0.0)
-      grad!(vec(data[:,index]), ctheta, config["lambda"], dtheta)
+      for i in index
+      	grad!(vec(data[:,i]), ctheta, config["lambda"], dtheta)
+	  end
+	  dtheta /= b
 
 	  # To compute the reduced variance gradient:
       v_t += mu_k - dtheta
@@ -202,11 +211,12 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
           t += 1
           if t >= 1
             svec = stheta - sthetaold
-            r = zeros(p)
+            r = zeros(d)
             if config["use_hvp"]
-              for i = 1:b_H
-                index = rand(1:N)
-                hvp!(vec(data[:,index]), stheta, svec, config["lambda"], r)
+              # Sample a minibatch for T (line 14)
+              index = sample(1:N, b_H, replace = false)
+              for i in index
+                hvp!(vec(data[:,i]), stheta, svec, config["lambda"], r)
               end
               r /= b_H
             else
