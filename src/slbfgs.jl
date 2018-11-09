@@ -139,8 +139,8 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
   u_r_prev = zeros(d)  						# Average of path travelled in the previous inverse hessian update
   grad_f_xt = zeros(d)						# Component of variance reduced gradient v_t
   grad_f_wk = zeros(d)						# Component of variance reduced gradient v_t
-  w_k = copy(w_0)	  
-  w_k_prev = copy(w_0)
+  w_k = copy(w_0)
+  x_t_hist = zeros(m, d)	  
 
   # Header for verbose output
   println("===== running stochastic lbfgs =====\n")
@@ -178,15 +178,15 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
       fill!(grad_f_xt, 0.0)
       fill!(grad_f_wk, 0.0)
       for i in index
-		grad!(vec(data[:,i]), w_k, config["lambda"], grad_f_xt)
-		grad!(vec(data[:,i]), x_t, config["lambda"], grad_f_wk)
+		grad!(vec(data[:,i]), x_t, config["lambda"], grad_f_xt)
+		grad!(vec(data[:,i]), w_k, config["lambda"], grad_f_wk)
       end
       grad_f_xt /= b
       grad_f_wk /= b
 	  # Compute the reduced variance gradient (line 9)
       v_t += grad_f_xt - grad_f_wk + mu_k
 	  # Part of u_r update (line 13)
-      u_r += w_k
+      u_r += x_t
 
 	  # Check to see if L iterations have passed (triggers hessian update; line 11)
       if mod(t, L) == 0
@@ -195,10 +195,10 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
 		# Final step in computation of u_r (line 13)
         u_r /= L
         if r >= 1
-          # Compute s_r update (line 15)
-          s_r = u_r - u_r_prev
           # Use HVP only; start by sampling a minibatch for T (line 14)
           index = sample(1:N, b_H, replace = false)
+          # Compute s_r update (line 15)
+          s_r = u_r - u_r_prev
           # Compute an estimate for y_r using HVPs [must swap with approximation!] y_r = nabla^2 f_T(u_r)*s_r (line 16)
           y_r = zeros(d)
           for i in index
@@ -212,14 +212,19 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
         u_r = zeros(d)
       end
       
-      # Compute next step in the iteration (line 10)
-      copy!(w_k_prev, w_k)
+      # Compute next iteration step (line 10)
+      x_t_hist[t,:] = copy(x_t)				# Need to store the history of iteration steps
       if r > 1								# After one? Hessian correction, need the two-loop recursion product
-        w_k += -eta * mvp(IH_hist, v_t, delta)
+        x_t += -eta * mvp(IH_hist, v_t, delta)
       else									# H_0 = I, so update will be simpler
-        w_k += -eta*v_t
+        x_t += -eta*v_t
       end
     end
+    # Set the next w_k value by randomly selecting an iterate from this batch (line 18)
+    x_t_hist[m,:] = copy(x_t)
+    index = rand(1:m)
+    w_k = copy(vec(x_t_hist[index,:]))
+    w_k = copy(x_t)
   end
   return w_k
 end
