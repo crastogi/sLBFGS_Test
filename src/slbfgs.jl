@@ -116,11 +116,11 @@ test_inverse_hessian()
 #########################
 ### sL-BFGS Main Loop ###
 #########################
-function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, theta::Vector, config::Dict, diagnostics::HDF5Group)
+function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w_0::Vector, config::Dict, diagnostics::HDF5Group)
   ### FIXED CONSTANTS ###
   L = config["hess_period"]					# Number of iterations before the inverse hessian is updated
   M = config["memory_size"]					# This is memory size M
-  d = length(theta)							# Dimensionality
+  d = length(w_0)							# Dimensionality
   N = size(data, 2)							# Number of data points
   b_H = config["hess_samples"]				# Batch size for stochastic Hessian samples
   b = convert(Int, b_H/10)					# Batch size for stochastic gradient samples
@@ -140,8 +140,8 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
   grad_f_xt = zeros(d)						# Component of variance reduced gradient v_t
   grad_f_wk = zeros(d)						# Component of variance reduced gradient v_t
   
-  thetaold = copy(theta)
-  P = zeros(d)
+  thetaold = copy(w_0)
+  theta = copy(w_0)	
 
   # Header for verbose output
   println("===== running stochastic lbfgs =====\n")
@@ -169,11 +169,6 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
     end
     mu_k /= N								# Normalize to unit likelihood
     
-    # ONLY for first epoch
-    if k == 1
-      # Do a gradient step to get LBFGS started
-      copy!(P, -mu_k/norm(mu_k))
-    end
     copy!(theta, ctheta)
     
     # Perform m iterations before a full gradient computation takes place (line 6) [Ensure t index starts from 1]
@@ -221,18 +216,13 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
         copy!(u_r_prev, u_r)
         u_r = zeros(d)
       end
-      if r > 1
-        P = -eta * mvp(IH_hist, v_t, delta)
-      else
-        P = -eta*v_t
-      end
       
-      # take step
+      # Compute next step in the iteration (line 10)
       copy!(thetaold, theta)
-      if config["use_gradient_step"]
-        theta -= eta*v_t
-      else
-        theta += P
+      if r > 1								# After one? Hessian correction, need the two-loop recursion product
+        theta += -eta * mvp(IH_hist, v_t, delta)
+      else									# H_0 = I, so update will be simpler
+        theta += -eta*v_t
       end
     end
   end
