@@ -130,35 +130,33 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
   max_epoch = config["epochs"]				# Maximum number of epochs
     
   ### RUNTIME VARIABLES ###
-  v_t = zeros(d)
-  v_t_prev = zeros(d)
+  r = -1 									# Number of currently computed Hessian correction pairs
+  v_t = zeros(d)							# Current iteration's variance reduced gradient estimate
+  v_t_prev = zeros(d)						# Previous iteration's variance reduced gradient estimate
   mu_k = zeros(d)							# Full Gradient for Variance-Reduced Gradient
-  IH_hist = InverseHessian(M)
-  
-  grad_f_xt = zeros(d)
-  grad_f_wk = zeros(d)
+  IH_hist = InverseHessian(M)				# Object that stores the history of the inverse hessian components (s, y, and rho)
+  u_r = zeros(d)							# Average of path travelled in an inverse hessian update 
+  u_r_prev = zeros(d)  						# Average of path travelled in the previous inverse hessian update
+  grad_f_xt = zeros(d)						# Component of variance reduced gradient v_t
+  grad_f_wk = zeros(d)						# Component of variance reduced gradient v_t
   
   thetaold = copy(theta)
   P = zeros(d)
-  
-  t = -1 # number of correction pairs currently computed
-  stheta = zeros(d)
-  sthetaold = zeros(d)
-
-  hdf_loss = g_create(diagnostics, "loss")
-  hdf_theta = g_create(diagnostics, "theta")
 
   # Header for verbose output
   println("===== running stochastic lbfgs =====\n")
   println("iter | lbfgs error")
+  # Set up HDF5 output
+  hdf_loss = g_create(diagnostics, "loss")
+  hdf_theta = g_create(diagnostics, "theta")
   
   # Loop over epochs (fixed termination at the end of max_epoch; line 3)
-  for s in 1:max_epoch
+  for k in 1:max_epoch
     # Print epoch number and likelihood at epoch as the result of the iteration 
     l = loss(data, theta, config["lambda"])
-    @printf "%4d | %9.4E \n" s l
-    hdf_loss[@sprintf "%04d" s] = l
-    hdf_theta[@sprintf "%04d" s] = theta
+    @printf "%4d | %9.4E \n" k l
+    hdf_loss[@sprintf "%04d" k] = l
+    hdf_theta[@sprintf "%04d" k] = theta
 	
 	# Need to clone theta (equivalent to x_0 = w_k, line 5)
     ctheta = copy(theta)
@@ -172,14 +170,14 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
     mu_k /= N								# Normalize to unit likelihood
     
     # ONLY for first epoch
-    if s == 1
+    if k == 1
       # Do a gradient step to get LBFGS started
       copy!(P, -mu_k/norm(mu_k))
     end
     copy!(theta, ctheta)
     
-    # Perform m iterations before a full gradient computation takes place (line 6)
-    for k in 1:m
+    # Perform m iterations before a full gradient computation takes place (line 6) [Ensure t index starts from 1]
+    for t in 1:m
       # z_k = \nabla f_{i_k}(x_t) - \nabla f_{i_k}(w_k) + \mu_k
       copy!(v_t_prev, v_t)
       
@@ -197,36 +195,36 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, t
       grad_f_wk /= b
 	  # Compute the reduced variance gradient (line 9)
       v_t += grad_f_xt - grad_f_wk + mu_k
+	  # Part of u_r update (line 13)
+      u_r += theta
 
-      stheta += theta
-
-      if k > 1 # neccessary?
-      	# Check to see if L iterations have passed (triggers hessian update; line 11)
-        if mod(k, L) == 0
-          stheta /= L
-          t += 1
-          if t >= 1
-            svec = stheta - sthetaold
-            r = zeros(d)
-            if config["use_hvp"]
-              # Sample a minibatch for T (line 14)
-              index = sample(1:N, b_H, replace = false)
-              for i in index
-                hvp!(vec(data[:,i]), stheta, svec, config["lambda"], r)
-              end
-              r /= b_H
-            else
-              r = v_t - v_t_prev + delta*svec 		# delta a regularization parameter
-            end
-            add!(IH_hist, svec, r)
-            copy!(sthetaold, stheta)
+	  # Check to see if L iterations have passed (triggers hessian update; line 11)
+      if mod(t, L) == 0
+      	# Increment the number of Hessian correction pairs that have been computed (line 12)
+		r += 1
+		# Final step in computation of u_r (line 13)
+        u_r /= L
+        if r >= 1
+          # Compute s_r update (line 15)
+          s_r = u_r - u_r_prev
+          # Use HVP only; start by sampling a minibatch for T (line 14)
+          index = sample(1:N, b_H, replace = false)
+          # Compute an estimate for y_r using HVPs [must swap with approximation!] y_r = nabla^2 f_T(u_r)*s_r (line 16)
+          y_r = zeros(d)
+          for i in index
+            hvp!(vec(data[:,i]), u_r, s_r, config["lambda"], y_r)
           end
+          y_r /= b_H
+          add!(IH_hist, s_r, y_r)
         end
-        if t > 1
-          P = -eta * mvp(IH_hist, v_t, delta)
-        else
-          P = -eta*v_t
-        end
+        # Resetting u_r for next evaluation (line 13)
+        copy!(u_r_prev, u_r)
+        u_r = zeros(d)
+      end
+      if r > 1
+        P = -eta * mvp(IH_hist, v_t, delta)
+      else
+        P = -eta*v_t
       end
       
       # take step
