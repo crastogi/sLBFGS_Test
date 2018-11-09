@@ -139,9 +139,8 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
   u_r_prev = zeros(d)  						# Average of path travelled in the previous inverse hessian update
   grad_f_xt = zeros(d)						# Component of variance reduced gradient v_t
   grad_f_wk = zeros(d)						# Component of variance reduced gradient v_t
-  
-  thetaold = copy(w_0)
-  theta = copy(w_0)	
+  w_k = copy(w_0)	  
+  w_k_prev = copy(w_0)
 
   # Header for verbose output
   println("===== running stochastic lbfgs =====\n")
@@ -153,45 +152,41 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
   # Loop over epochs (fixed termination at the end of max_epoch; line 3)
   for k in 1:max_epoch
     # Print epoch number and likelihood at epoch as the result of the iteration 
-    l = loss(data, theta, config["lambda"])
+    l = loss(data, w_k, config["lambda"])
     @printf "%4d | %9.4E \n" k l
     hdf_loss[@sprintf "%04d" k] = l
-    hdf_theta[@sprintf "%04d" k] = theta
-	
-	# Need to clone theta (equivalent to x_0 = w_k, line 5)
-    ctheta = copy(theta)
-    
+    hdf_theta[@sprintf "%04d" k] = w_k
+   
 	# Next, compute full gradient for variance reduction (line 4)
     # \mu_k = 1/N \sum_i^N \nabla f_i(w_k)
     fill!(mu_k, 0.0)						# Fill the variance-reduced gradient with zeros  
     for i = 1:N								# Compute variance-reduced gradient 
-      grad!(vec(data[:,i]), ctheta, config["lambda"], mu_k)
+      grad!(vec(data[:,i]), w_k, config["lambda"], mu_k)
     end
     mu_k /= N								# Normalize to unit likelihood
-    
-    copy!(theta, ctheta)
+	# Need to clone w_k (equivalent to x_0 = w_k, line 5)
+    x_t = copy(w_k)
     
     # Perform m iterations before a full gradient computation takes place (line 6) [Ensure t index starts from 1]
     for t in 1:m
-      # z_k = \nabla f_{i_k}(x_t) - \nabla f_{i_k}(w_k) + \mu_k
+      # Compute stochastic gradient estimate: v_t = \nabla f_{i_k}(x_t) - \nabla f_{i_k}(w_k) + \mu_k
+	  # Begin by sampling a minibatch for S (line 7)
       copy!(v_t_prev, v_t)
-      
-      # Compute stochastic gradient estimate: begin by sampling a minibatch for S (line 7)
       index = sample(1:N, b, replace = false)
       # Compute stochastic gradient grad_f_xt (line 8)
       fill!(v_t, 0.0)
       fill!(grad_f_xt, 0.0)
       fill!(grad_f_wk, 0.0)
       for i in index
-		grad!(vec(data[:,i]), theta, config["lambda"], grad_f_xt)
-		grad!(vec(data[:,i]), ctheta, config["lambda"], grad_f_wk)
+		grad!(vec(data[:,i]), w_k, config["lambda"], grad_f_xt)
+		grad!(vec(data[:,i]), x_t, config["lambda"], grad_f_wk)
       end
       grad_f_xt /= b
       grad_f_wk /= b
 	  # Compute the reduced variance gradient (line 9)
       v_t += grad_f_xt - grad_f_wk + mu_k
 	  # Part of u_r update (line 13)
-      u_r += theta
+      u_r += w_k
 
 	  # Check to see if L iterations have passed (triggers hessian update; line 11)
       if mod(t, L) == 0
@@ -218,13 +213,13 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
       end
       
       # Compute next step in the iteration (line 10)
-      copy!(thetaold, theta)
+      copy!(w_k_prev, w_k)
       if r > 1								# After one? Hessian correction, need the two-loop recursion product
-        theta += -eta * mvp(IH_hist, v_t, delta)
+        w_k += -eta * mvp(IH_hist, v_t, delta)
       else									# H_0 = I, so update will be simpler
-        theta += -eta*v_t
+        w_k += -eta*v_t
       end
     end
   end
-  return theta
+  return w_k
 end
