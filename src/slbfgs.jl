@@ -113,6 +113,19 @@ function test_inverse_hessian()
 end
 test_inverse_hessian()
 
+#### FD HVP replacement
+function slbfgs_hvp!(datapoint::Vector, theta::Vector, v::Vector, lambda::Float64, result::Vector)
+  eps = 1e-3	
+  
+  fd_hvp = zeros(length(theta))
+  grad!(datapoint, theta-eps*v, lambda, fd_hvp)
+  fd_hvp = -1*fd_hvp
+  grad!(datapoint, theta+eps*v, lambda, fd_hvp)
+  fd_hvp = fd_hvp/(2*eps)
+  
+  BLAS.axpy!(1.0, fd_hvp, result)
+end
+
 #########################
 ### sL-BFGS Main Loop ###
 #########################
@@ -130,7 +143,7 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
   max_epoch = config["epochs"]				# Maximum number of epochs
     
   ### RUNTIME VARIABLES ###
-  r = -1 									# Number of currently computed Hessian correction pairs
+  r = 0 									# Number of currently computed Hessian correction pairs
   v_t = zeros(d)							# Current iteration's variance reduced gradient estimate
   v_t_prev = zeros(d)						# Previous iteration's variance reduced gradient estimate
   mu_k = zeros(d)							# Full Gradient for Variance-Reduced Gradient
@@ -140,7 +153,7 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
   grad_f_xt = zeros(d)						# Component of variance reduced gradient v_t
   grad_f_wk = zeros(d)						# Component of variance reduced gradient v_t
   w_k = copy(w_0)
-  x_t_hist = zeros(m, d)	  
+  x_t_hist = zeros(m, d)	 
 
   # Header for verbose output
   println("===== running stochastic lbfgs =====\n")
@@ -188,36 +201,37 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
 	  # Part of u_r update (line 13)
       u_r += x_t
 
+      # Compute next iteration step (line 10)
+      x_t_hist[t,:] = copy(x_t)				# Need to store the history of iteration steps
+      if r > 1								# After one Hessian correction, need the two-loop recursion product
+        x_t += -eta * mvp(IH_hist, v_t, delta)
+      else									# H_0 = I, so update will be simpler
+        x_t += -eta*v_t
+      end
+
 	  # Check to see if L iterations have passed (triggers hessian update; line 11)
       if mod(t, L) == 0
       	# Increment the number of Hessian correction pairs that have been computed (line 12)
 		r += 1
 		# Final step in computation of u_r (line 13)
         u_r /= L
-        if r >= 1
-          # Use HVP only; start by sampling a minibatch for T (line 14)
-          index = sample(1:N, b_H, replace = false)
-          # Compute s_r update (line 15)
-          s_r = u_r - u_r_prev
-          # Compute an estimate for y_r using HVPs [must swap with approximation!] y_r = nabla^2 f_T(u_r)*s_r (line 16)
-          y_r = zeros(d)
-          for i in index
-            hvp!(vec(data[:,i]), u_r, s_r, config["lambda"], y_r)
-          end
-          y_r /= b_H
-          add!(IH_hist, s_r, y_r)
+
+        # Use HVP only; start by sampling a minibatch for T (line 14)
+        index = sample(1:N, b_H, replace = false)
+        # Compute s_r update (line 15)
+        s_r = u_r - u_r_prev
+        # Compute an estimate for y_r using HVPs [must swap with approximation!] y_r = nabla^2 f_T(u_r)*s_r (line 16)
+        y_r = zeros(d)
+        for i in index
+          slbfgs_hvp!(vec(data[:,i]), u_r, s_r, config["lambda"], y_r)
         end
+        y_r /= b_H
+        # Store latest values of s_r, y_r updates
+        add!(IH_hist, s_r, y_r)
+
         # Resetting u_r for next evaluation (line 13)
         copy!(u_r_prev, u_r)
         u_r = zeros(d)
-      end
-      
-      # Compute next iteration step (line 10)
-      x_t_hist[t,:] = copy(x_t)				# Need to store the history of iteration steps
-      if r > 1								# After one? Hessian correction, need the two-loop recursion product
-        x_t += -eta * mvp(IH_hist, v_t, delta)
-      else									# H_0 = I, so update will be simpler
-        x_t += -eta*v_t
       end
     end
     # Set the next w_k value by randomly selecting an iterate from this batch (line 18)
