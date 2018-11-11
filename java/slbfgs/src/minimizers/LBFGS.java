@@ -3,7 +3,7 @@ package minimizers;
 import base.*;
 
 public class LBFGS extends Minimizer{
-	private boolean isBracketed, useMCSearch, errorBars, storeHessian, isVerbose;
+	private boolean isBracketed, useMCSearch, isVerbose;
 	private int nDim, maxMemoryDepth, maxIterations, nLSEvals, nFunctionEvals;
 	private int maxLSIterations	= 20;
 	private double uTol			= 1e-10;
@@ -17,10 +17,10 @@ public class LBFGS extends Minimizer{
 	private Model.CompactGradientOutput fOut;
 	
 	//LBFGS object constructor; load basic minimization parameters. To be used for all subsequent minimizations using this object.
-	public LBFGS(Model model, int maxMemoryDepth, double epsilon, int maxIterations, boolean useMCSearch, boolean errorBars, 
-			boolean storeHessian, boolean isVerbose) {
+	public LBFGS(Model model, int maxMemoryDepth, double epsilon, int maxIterations, boolean useMCSearch, 
+			boolean isVerbose) {
 		this.model				= model;
-		nDim					= model.getNDimensions();
+		nDim					= model.getNFeatures();
 		if (maxMemoryDepth<=0)	throw new IllegalArgumentException("Maximum memory depth must be positive!");
 		this.maxMemoryDepth		= maxMemoryDepth;		//Set the maximum memory depth.
 		if (c1<0||c1>1)	throw new IllegalArgumentException("The parameter c1 must be between 0 and 1!");
@@ -28,10 +28,7 @@ public class LBFGS extends Minimizer{
 		if (maxIterations<2)	throw new IllegalArgumentException("The maximum number of minimization steps must be greater than 1!");
 		this.maxIterations		= maxIterations;		//Maximum number of minimization steps before convergence failure is declared
 		this.useMCSearch		= useMCSearch;
-		this.errorBars			= errorBars;
-		this.storeHessian		= storeHessian;
 		this.isVerbose			= isVerbose;
-		crossValidate			= false;
 	}
 		
 	protected Fit doMinimize(double[] seed, String trajectoryFile) throws Exception {
@@ -52,7 +49,7 @@ public class LBFGS extends Minimizer{
 		 * symmetry. */
 		if (seed!=null) {
 			try {
-				xInput = model.compressPositionVector(seed);
+				xInput = seed;
 			} catch (Exception e) {
 				throw new IllegalArgumentException("Improper seed!");
 			}
@@ -71,24 +68,8 @@ public class LBFGS extends Minimizer{
 		if (Array.norm(gCurr)/Math.max(1, Array.norm(xCurr)) < epsilon) {
 			System.out.println("Already at minimum!");
 			tStart	= (System.currentTimeMillis()-tStart)/1000;
-			model.normalForm();
 			fCurr /= model.likelihoodNormalizer();
 			fitOutput.recordFit(iteration, nFunctionEvals, tStart, fCurr, model);
-			if (!crossValidate) {
-				if (storeHessian) {
-					if (errorBars) {
-						model.errorEval();
-						fitOutput.recordErrorBars(model.nullVectors, model.getErrorBars());
-						fitOutput.storeHessian(model.getHessian());
-					} else {
-						model.hessianEval();
-						fitOutput.storeHessian(model.getHessian());
-					}
-				} else if (errorBars) {
-					model.errorEval();
-					fitOutput.recordErrorBars(model.nullVectors, model.getErrorBars());
-				}
-			}
 			return fitOutput;
 		}
 		h0Curr	= Array.ones(nDim);						//Create a new hk0 array with ones on the diagonal
@@ -147,24 +128,8 @@ public class LBFGS extends Minimizer{
 				if (trajectoryFile!=null)	fitOutput.printTrajectories(trajectoryFile, true);
 				if (isVerbose)	printStep(iteration, nFunctionEvals, fNext, Array.norm(s[0]), alphaCurr, Array.norm(gNext));
 				System.out.println("Convergence criteria met.");
-				model.normalForm();
 				fNext /= model.likelihoodNormalizer();
 				fitOutput.recordFit(iteration, nFunctionEvals, tStart, fNext, model);
-				if (!crossValidate) {
-					if (storeHessian) {
-						if (errorBars) {
-							model.errorEval();
-							fitOutput.recordErrorBars(model.nullVectors, model.getErrorBars());
-							fitOutput.storeHessian(model.getHessian());
-						} else {
-							model.hessianEval();
-							fitOutput.storeHessian(model.getHessian());
-						}
-					} else if (errorBars) {
-						model.errorEval();
-						fitOutput.recordErrorBars(model.nullVectors, model.getErrorBars());
-					}
-				}
 				if (trajectoryFile!=null)	fitOutput.printTrajectories(trajectoryFile, true);
 				return fitOutput;
 			}

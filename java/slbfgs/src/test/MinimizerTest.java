@@ -56,34 +56,7 @@ public class MinimizerTest {
 				seed[0] = generator.nextDouble()*xlim*2-xlim;
 				seed[1] = generator.nextDouble()*ylim*2-ylim;
 				
-				minimize = new PatternSearch(testFunc, d0, convergence, 0.5, false, false, false, false);
-				try {
-					fit = (MinimizerFit) minimize.minimize(seed, null)[0];
-					Array.print(fit.finalPosition);
-					if (Array.dist(fit.finalPosition, correctPos)<2*convergence) {
-						successes[0]++;						
-						fitTime[0] += fit.fitTime;
-						functionCalls[0] += fit.functionCalls;
-						iterations[0] += fit.fitSteps;
-					}
-				} catch (Exception e) {
-					//Do nothing
-				}
-				
-				minimize = new PatternSearch(testFunc, d0, convergence, 0.5, true, false, false, false);
-				try {
-					fit = (MinimizerFit) minimize.minimize(seed, null)[0];
-					if (Array.dist(fit.finalPosition, correctPos)<2*convergence) {
-						successes[1]++;
-						fitTime[1] += fit.fitTime;
-						functionCalls[1] += fit.functionCalls;
-						iterations[1] += fit.fitSteps;
-					}
-				} catch (Exception e) {
-					//Do nothing
-				}
-				
-				minimize = new LBFGS(testFunc, maxMemoryDepth, convergence, maxIterations, false, false,false,false);
+				minimize = new LBFGS(testFunc, maxMemoryDepth, convergence, maxIterations, false, false);
 				try {
 					fit = (MinimizerFit) minimize.minimize(seed, null)[0];
 					if (Array.dist(fit.finalPosition, correctPos)<2*convergence) {
@@ -96,7 +69,7 @@ public class MinimizerTest {
 					//Do nothing
 				}
 				
-				minimize = new LBFGS(testFunc, maxMemoryDepth, convergence, maxIterations, true, false,false,false);
+				minimize = new LBFGS(testFunc, maxMemoryDepth, convergence, maxIterations, true,false);
 				try {
 					fit = (MinimizerFit) minimize.minimize(seed, null)[0];
 					if (Array.dist(fit.finalPosition, correctPos)<2*convergence) {

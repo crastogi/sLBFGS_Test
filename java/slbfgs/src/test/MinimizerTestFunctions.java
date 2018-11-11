@@ -150,17 +150,7 @@ public class MinimizerTestFunctions extends Model {
 	}
 
 	@Override
-	public void normalForm() {
-		//do nothing
-	}
-
-	@Override
-	public int getTotFeatures() {
-		return nDim;
-	}
-
-	@Override
-	public int getNDimensions() {
+	public int getNFeatures() {
 		return nDim;
 	}
 	
@@ -172,22 +162,6 @@ public class MinimizerTestFunctions extends Model {
 	@Override
 	public double[] getPositionVector() {
 		return Array.clone(x);
-	}
-
-	@Override
-	public double[] shiftBetas(double[] originalBetas, int shiftPositions) {
-		//Do nothing
-		return Array.clone(x);
-	}
-
-	@Override
-	public double[] orthogonalStep(double[] currPos, int position, double stepSize) {
-		//Take basic step
-		double[] output = Array.clone(currPos);
-		
-		output[position] += stepSize;
-		
-		return output;
 	}
 
 	@Override
@@ -203,11 +177,6 @@ public class MinimizerTestFunctions extends Model {
 	@Override
 	public CompactGradientOutput getGradient() {
 		return evaluate();
-	}
-
-	@Override
-	public CompactGradientOutput hessianEval() throws Exception {
-		return null;
 	}
 
 	@Override
