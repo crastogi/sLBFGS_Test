@@ -130,23 +130,11 @@ public class MinimizerTestFunctions extends Model {
 		return (new CompactGradientOutput(functionValue, functionGradient));
 	}
 
-	@Override
-	public void replaceData(Object o) {
-		//do nothing
-	}
-
 	//TODO: Check
 	@Override
 	public double likelihoodNormalizer() {
 		//do nothing
 		return 1;
-	}
-
-	//TODO: Check
-	@Override
-	public double maxLikelihood() {
-		//do nothing
-		return 0;
 	}
 
 	@Override

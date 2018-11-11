@@ -1,23 +1,14 @@
 package base;
 
 public abstract class Model {
-	public int maxFitRetries	= 5;	
-	
-	//The user must check to see if o is the right data type
-	public abstract void replaceData(Object o);
-	
 	public abstract double likelihoodNormalizer();
-	
-	public abstract double maxLikelihood();
-	
+
 	public abstract int getNFeatures();
 
-	//setParams does NOT SYMMETRIZE input
 	public abstract void setParams(double[] position);
 	
 	public abstract double[] getPositionVector();
-
-	//None of the following 5 functions utilize or obey symmetries. 
+ 
 	public abstract double functionEval() throws Exception;
 	
 	public abstract CompactGradientOutput gradientEval() throws Exception;

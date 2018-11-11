@@ -58,7 +58,7 @@ public class MinimizerTest {
 				
 				minimize = new LBFGS(testFunc, maxMemoryDepth, convergence, maxIterations, false, false);
 				try {
-					fit = (MinimizerFit) minimize.minimize(seed, null)[0];
+					fit = (MinimizerFit) minimize.doMinimize(seed, null);
 					if (Array.dist(fit.finalPosition, correctPos)<2*convergence) {
 						successes[2]++;
 						fitTime[2] += fit.fitTime;
@@ -71,7 +71,7 @@ public class MinimizerTest {
 				
 				minimize = new LBFGS(testFunc, maxMemoryDepth, convergence, maxIterations, true,false);
 				try {
-					fit = (MinimizerFit) minimize.minimize(seed, null)[0];
+					fit = (MinimizerFit) minimize.doMinimize(seed, null);
 					if (Array.dist(fit.finalPosition, correctPos)<2*convergence) {
 						successes[3]++;
 						fitTime[3] += fit.fitTime;

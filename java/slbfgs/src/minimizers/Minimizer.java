@@ -1,6 +1,5 @@
 package minimizers;
 
-import java.util.ArrayList;
 import java.util.Formatter;
 
 import base.*;
@@ -13,58 +12,9 @@ public class Minimizer {
 	 * defined. The public functions below are wrapper functions that
 	 * automatically provide the user with added functionality (see below).
 	 */
-	protected Fit doMinimize(double[] seed, String trajectoryFile) 
+	public Fit doMinimize(double[] seed, String trajectoryFile) 
 			throws Exception {
 		return null;
-	}
-	
-	//Special case of minimize to remove negative eigenvalues
-	public Fit[] minimize(double[] seed, String trajectoryFile) 
-			throws Exception {
-		int retryCount = 0;
-		double originalSeedScale = randomSeedScale;
-		Fit fitOutput;
-		
-		/* Try reseeding the fit if no seed is provided, as sometimes the random
-		 * start position can make it hard for LBFGS to converge. This will not 
-		 * trigger for Pattern Search. This refitting step will be attempted 
-		 * maxRetries number of times. Additionally, the random seed magnitude
-		 * will drop by a factor of 10 every failure. 
-		 */
-		if (seed==null) {
-			while (true) {
-				try {
-					fitOutput = doMinimize(seed, trajectoryFile);
-					break;
-				} catch (ArithmeticException e) {
-					if (retryCount>model.maxFitRetries) {
-						throw new Exception("Random reseed failed: General "
-								+ "Minimizer Failure.", e);
-					}
-					System.out.println("Minimizer failed. Attempting refit with"
-							+ " new random seed.");
-					retryCount++;
-					randomSeedScale /= 10;
-					continue;
-				} catch (Exception e) {
-					throw e;
-				}
-			}
-			randomSeedScale = originalSeedScale;
-		} else {
-			fitOutput = doMinimize(seed, trajectoryFile);
-		}
-
-		return new Fit[]{fitOutput};
-	}
-	
-	public Fit[] minimize(double[] seed, String trajectoryFile, ArrayList<Object[]> datasets) throws Exception {
-		Fit output = null;
-		
-		System.out.println("Fitting full dataset.");
-		output = minimize(seed, trajectoryFile)[0];
-
-		return new Fit[]{output};
 	}
 	
 	/* gradientEval uncompresses the input (desymmetrizes) and compresses

@@ -31,7 +31,7 @@ public class LBFGS extends Minimizer{
 		this.isVerbose			= isVerbose;
 	}
 		
-	protected Fit doMinimize(double[] seed, String trajectoryFile) throws Exception {
+	public Fit doMinimize(double[] seed, String trajectoryFile) throws Exception {
 		int iteration	= 0;
 		nFunctionEvals	= 0;
 		int idx;
