@@ -2,25 +2,15 @@ package base;
 
 import java.util.Formatter;
 
-import base.*;
-
 public class Minimizer {
 	protected double epsilon, randomSeedScale = .05;
 	protected Model model;
 	
-	/* This is the function where the actual minimizer algorithm must be
-	 * defined. The public functions below are wrapper functions that
-	 * automatically provide the user with added functionality (see below).
-	 */
 	public Fit doMinimize(double[] seed, String trajectoryFile) 
 			throws Exception {
 		return null;
 	}
 	
-	/* gradientEval uncompresses the input (desymmetrizes) and compresses
-	 * the gradient (symmetrizes) so that functions work in the compressed
-	 * (reduced) space.
-	 */
 	protected Model.CompactGradientOutput gradientEval(double[] input, 
 			boolean normalize) throws Exception {
 		double[] tempGradient;

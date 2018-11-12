@@ -1,7 +1,5 @@
 package base;
 
-import base.*;
-
 public class LBFGS extends Minimizer{
 	private boolean isBracketed, useMCSearch, isVerbose;
 	private int nDim, maxMemoryDepth, maxIterations, nLSEvals, nFunctionEvals;
