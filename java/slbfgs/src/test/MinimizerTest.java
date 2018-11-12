@@ -5,7 +5,8 @@ import java.io.PrintStream;
 import java.util.Random;
 
 import base.Array;
-import minimizers.*;
+import base.LBFGS;
+import base.Minimizer;
 
 public class MinimizerTest {
 	public static int testLoops = 10000;			//Number of random starts to test

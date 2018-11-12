@@ -1,4 +1,4 @@
-package minimizers;
+package base;
 
 import java.util.Formatter;
 
