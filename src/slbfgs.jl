@@ -240,5 +240,7 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
     w_k = copy(vec(x_t_hist[index,:]))
     w_k = copy(x_t)
   end
+  println(length(w_k))
+  println(w_k)
   return w_k
 end

@@ -5,15 +5,29 @@ import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 
-public abstract class Fit {
-	public int fitSteps, functionCalls;
+public class Fit {
+	public int fitSteps, functionCalls, nDim;
 	public double fitTime, likelihood;
+	public String functionType;
+	public double[] seed						= null;
 	public double[] finalPosition				= null;
 	public ArrayList<double[]> trajectory		= new ArrayList<double[]>();
-
-	public abstract void recordFit(int fitSteps, int functionCalls, 
-			double fitTime, double likelihood, Model input); 
 	
+	// Fit Constructor
+	public Fit(String functionType, int nDim, double[] seed) {		
+		this.functionType	= functionType;				// Stores the name of the function
+		this.nDim			= nDim;						// Stores dimensionality
+		this.seed			= seed;						// And seed (if it exists)
+	}
+	
+	public void recordFit(int fitSteps, int functionCalls, double fitTime, double likelihood, Model input) {
+		this.fitSteps = fitSteps;
+		this.functionCalls = functionCalls;
+		this.fitTime = fitTime;
+		this.likelihood = likelihood;
+		this.finalPosition = input.getPositionVector();
+	}
+		
 	public double[] positionVector() {
 		return Array.clone(finalPosition);
 	}
@@ -65,5 +79,4 @@ public abstract class Fit {
 			}
 		}
 	}
-	
 }

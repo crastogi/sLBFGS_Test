@@ -66,7 +66,6 @@ public class LBFGS extends Minimizer{
 		if (Array.norm(gCurr)/Math.max(1, Array.norm(xCurr)) < epsilon) {
 			System.out.println("Already at minimum!");
 			tStart	= (System.currentTimeMillis()-tStart)/1000;
-			fCurr /= model.likelihoodNormalizer();
 			fitOutput.recordFit(iteration, nFunctionEvals, tStart, fCurr, model);
 			return fitOutput;
 		}
@@ -126,7 +125,6 @@ public class LBFGS extends Minimizer{
 				if (trajectoryFile!=null)	fitOutput.printTrajectories(trajectoryFile, true);
 				if (isVerbose)	printStep(iteration, nFunctionEvals, fNext, Array.norm(s[0]), alphaCurr, Array.norm(gNext));
 				System.out.println("Convergence criteria met.");
-				fNext /= model.likelihoodNormalizer();
 				fitOutput.recordFit(iteration, nFunctionEvals, tStart, fNext, model);
 				if (trajectoryFile!=null)	fitOutput.printTrajectories(trajectoryFile, true);
 				return fitOutput;

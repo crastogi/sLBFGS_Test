@@ -22,10 +22,6 @@ public class Minimizer {
 		if (out==null)	throw new UnsupportedOperationException("The function "
 				+ "gradientEval() has not been defined!");
 		tempGradient		= out.gradientVector;
-		if (normalize) {
-			out.functionValue	*= model.likelihoodNormalizer();
-			tempGradient		= Array.scalarMultiply(tempGradient, model.likelihoodNormalizer());
-		}
 		out.gradientVector	= tempGradient;
 		return out;	
 	}

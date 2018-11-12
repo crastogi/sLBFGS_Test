@@ -130,13 +130,6 @@ public class MinimizerTestFunctions extends Model {
 		return (new CompactGradientOutput(functionValue, functionGradient));
 	}
 
-	//TODO: Check
-	@Override
-	public double likelihoodNormalizer() {
-		//do nothing
-		return 1;
-	}
-
 	@Override
 	public int getNFeatures() {
 		return nDim;
@@ -169,6 +162,20 @@ public class MinimizerTestFunctions extends Model {
 
 	@Override
 	public Fit generateFit(double[] seed) {
-		return new MinimizerFit(functionType, nDim, seed);
+		String fName = null;
+		
+		switch (functionType) {
+		case 1:		fName = "Rosenbrock Function";
+					break;
+		case 2:		fName = "Multi-dimensional Sphere";
+					break;
+		case 3:		fName = "Beale's Function";
+					break;
+		case 4:		fName = "Matya's Function";
+					break;
+		case 5:		fName = "Goldstien-Price Function";
+		}
+		
+		return new Fit(fName, nDim, seed);
 	}
 }

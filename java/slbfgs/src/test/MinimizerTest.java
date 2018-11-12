@@ -5,6 +5,7 @@ import java.io.PrintStream;
 import java.util.Random;
 
 import base.Array;
+import base.Fit;
 import base.LBFGS;
 import base.Minimizer;
 
@@ -28,7 +29,7 @@ public class MinimizerTest {
 		for (int fType = 1; fType<=5; fType++) {
 			//Initialize test functions (2D case only)
 			MinimizerTestFunctions testFunc = new MinimizerTestFunctions(fType, 2);
-			MinimizerFit fit = null;
+			Fit fit = null;
 			Minimizer minimize = new Minimizer();
 			
 			//Define final position
@@ -59,7 +60,7 @@ public class MinimizerTest {
 				
 				minimize = new LBFGS(testFunc, maxMemoryDepth, convergence, maxIterations, false, false);
 				try {
-					fit = (MinimizerFit) minimize.doMinimize(seed, null);
+					fit = minimize.doMinimize(seed, null);
 					if (Array.dist(fit.finalPosition, correctPos)<2*convergence) {
 						successes[2]++;
 						fitTime[2] += fit.fitTime;
@@ -72,7 +73,7 @@ public class MinimizerTest {
 				
 				minimize = new LBFGS(testFunc, maxMemoryDepth, convergence, maxIterations, true,false);
 				try {
-					fit = (MinimizerFit) minimize.doMinimize(seed, null);
+					fit = minimize.doMinimize(seed, null);
 					if (Array.dist(fit.finalPosition, correctPos)<2*convergence) {
 						successes[3]++;
 						fitTime[3] += fit.fitTime;

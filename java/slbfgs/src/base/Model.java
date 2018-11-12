@@ -1,8 +1,6 @@
 package base;
 
 public abstract class Model {
-	public abstract double likelihoodNormalizer();
-
 	public abstract int getNFeatures();
 
 	public abstract void setParams(double[] position);
