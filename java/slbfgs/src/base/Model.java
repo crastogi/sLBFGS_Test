@@ -1,8 +1,13 @@
 package base;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
 
 public abstract class Model {
+	
+	public double SampleTime = 0;
+	
 	public int nDim = 0, N = 0, evaluatedDataPoints = 0;
 	public String fName = "N/A";
 	public int[] currBatchIdx;
@@ -30,6 +35,33 @@ public abstract class Model {
 	}
 	
 	public void sampleBatch(int k) {
+		double tStart = System.nanoTime();
+		
+		int idx = 0;
+		currBatchIdx = new int[k];
+		HashSet<Integer> h = new HashSet<Integer>();
+		
+		for (int i=0; i<k; i++) {
+			h.add(mtfast.nextInt(N));
+		}
+		while(h.size()<k-1) {
+			h.add(mtfast.nextInt(N));
+		}
+		Iterator<Integer> i = h.iterator(); 
+        while (i.hasNext()) {
+        	currBatchIdx[idx] = i.next();
+        	idx++;
+        }
+        
+		SampleTime += (System.nanoTime()-tStart)/1E9;
+		
+		return;
+	}
+	
+	/**
+	public void sampleBatch(int k) {
+		double tStart = System.nanoTime();
+		
 		int nBatches, randIdx, temp;
 		int[] shuffledIdx, tempBatch;
 		
@@ -72,8 +104,12 @@ public abstract class Model {
 		// set idx and exit
 		currBatchIdx = storedBatches.get(0);
 		storedBatches.remove(0);
+		
+		SampleTime += (System.nanoTime()-tStart)/1E9;
+		
 		return;
 	}
+	**/
 	
 	public class CompactGradientOutput {
 		public double functionValue = 0;

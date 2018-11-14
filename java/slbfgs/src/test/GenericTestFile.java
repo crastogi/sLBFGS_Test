@@ -17,7 +17,9 @@ public class GenericTestFile {
 		Fit fit = null;
 		
 		// Minimize with LBFGS
+		double tStart = System.nanoTime();
 		min = new LBFGS(svm, 200, 1E-5, 1000, true, true);
+		double tEnd = System.nanoTime();
 		
 		try {
 			fit = min.doMinimize(null, null);
@@ -26,13 +28,14 @@ public class GenericTestFile {
 		}
 		System.out.println(fit.likelihood);
 	
-		min = new sLBFGS(svm, 10, 100, 10, 30, 10, 1000, 0.001, 0, true);
+		min = new sLBFGS(svm, 10, 100, 10, 30, 10, 1000, 0.01, 0, true);
 		
 		try {
 			fit = min.doMinimize(null, null);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		System.out.println("LBFGS Time consumed: "+(tEnd-tStart)/1E9);
 		System.out.println(fit.likelihood);
 	}
 }

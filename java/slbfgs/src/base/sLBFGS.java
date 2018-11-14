@@ -8,6 +8,8 @@ public class sLBFGS extends Minimizer{
 	private double eta, delta;
 	private Fit fitOutput;
 	private Model.CompactGradientOutput fOut;
+	
+	private double IHTime = 0, TwoLoopTime = 0;
 
 	//TODO: Add convergence criteria cutoff!
 	//TODO: Include option to toggle randomized selection of final point!
@@ -40,6 +42,8 @@ public class sLBFGS extends Minimizer{
 	}
 	
 	public Fit doMinimize(double[] seed, String trajectoryFile) throws Exception {
+		double tEpochStart = 0, tEpochEnd = 0;
+		
 		int r = 0;									// Number of currently computed Hessian correction pairs
 		double tStart, tEnd;
 		double[] v_t, v_t_prev;						// Current and previous iteration's variance reduced gradient estimate
@@ -79,8 +83,11 @@ public class sLBFGS extends Minimizer{
 			//TODO: Fix printing out of update steps
 			// Print some information about the current epoch
 			if (isVerbose) {
-				printStep(k, model.evaluatedDataPoints/N, fOut.functionValue, Array.norm(Array.subtract(w_k, w_k_prev)));
+				printStep(k, model.evaluatedDataPoints/N, fOut.functionValue, Array.norm(Array.subtract(w_k, w_k_prev)), (tEpochEnd-tEpochStart)/1E9);
 			}
+
+			tEpochStart = System.nanoTime();
+			
 			// Assign variance reduced gradient
 			mu_k = Array.clone(fOut.gradientVector);
 			// Set x_t to current value of w_k
@@ -134,6 +141,7 @@ public class sLBFGS extends Minimizer{
 			//TODO: provide option for selecting between this and random selection
 			w_k = Array.clone(x_t);
 //			x_t_hist = new ArrayList<double[]>();
+			tEpochEnd = System.nanoTime();
 		}
 		//TODO: Find way to complain about not converging if all epochs are exhausted!
 		
@@ -145,10 +153,17 @@ public class sLBFGS extends Minimizer{
 			printStep(maxEpoch, model.evaluatedDataPoints/N, fOut.functionValue, Array.norm(Array.subtract(w_k, w_k_prev)));
 		}
 		fitOutput.recordFit(0, 0, tStart, fOut.functionValue, model);
+		System.out.println("Total time consumed: "+(System.nanoTime()-tStart)/1E9);
+		System.out.println("IH Time consumed: "+IHTime);
+		System.out.println("Two Loop Time consumed: "+TwoLoopTime);
+		System.out.println("Batch Sampling Time consumed: "+model.SampleTime);
+		System.out.println("Stochastic Gradient Time consumed: "+GradientTime);
 		return fitOutput;
 	}
 	
 	private double[] twoLoopRecursion(InverseHessian IH, double[] v_t) {
+		double tStart = System.nanoTime();
+		
 		int currMemDepth = IH.rho.size();
 		double alpha, beta, gamma;
 		double[] q, r;
@@ -182,6 +197,8 @@ public class sLBFGS extends Minimizer{
 			r = Array.addScalarMultiply(r, alphas[i]-beta, IH.s.get(i));
 		}
 		
+		TwoLoopTime += (System.nanoTime()-tStart)/1E9;
+		
 		return r;
 	}
 	
@@ -195,6 +212,8 @@ public class sLBFGS extends Minimizer{
 		}
 		
 		public void add(double[] inS, double[] inY) {
+			double tStart = System.nanoTime();
+			
 			// Compute rho in the lbfgs two-loop method: rho_j = 1/s_j^T*y_j
 			double currRho = 1.0/Array.dotProduct(inS, inY);
 			
@@ -209,6 +228,7 @@ public class sLBFGS extends Minimizer{
 			rho.add(currRho);
 			s.add(inS);
 			y.add(inY);
+			IHTime += (System.nanoTime()-tStart)/1E9;
 		}
 	}
 }

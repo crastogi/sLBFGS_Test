@@ -3,6 +3,9 @@ package base;
 import java.util.Formatter;
 
 public class Minimizer {
+	
+	public double GradientTime = 0; 
+	
 	protected double epsilon, randomSeedScale = .05;
 	protected Model model;
 	
@@ -17,7 +20,12 @@ public class Minimizer {
 	}
 	
 	protected Model.CompactGradientOutput stochasticEvaluate(double[] input) throws Exception {
+		double tStart = System.nanoTime();
+		
 		model.setParams(input);
+		
+		GradientTime += (System.nanoTime()-tStart)/1E9;
+		
 		return model.stochasticGradientEval();
 	}
 	
