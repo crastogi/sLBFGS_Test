@@ -5,14 +5,11 @@ import java.io.FileReader;
 import java.util.ArrayList;
 
 import base.Array;
-import base.Fit;
 import base.Model;
 
 public class SVMTest extends Model {
-	public int nDim;									// The number of dimensions for this space
-	public int N;										// Number of datapoints
 	public double lambda;								// Regularizer for svm
-	public double[] theta;									// The vector storing the parameters for current evaluation
+	public double[] theta;								// The vector storing the parameters for current evaluation
 	public double[] classes;							// The class of every data point
 	public double[][] data;								// The data for every point
 
@@ -59,6 +56,7 @@ public class SVMTest extends Model {
         
         this.lambda = lambda;
         theta = new double[nDim];
+        fName = "Simple SVM";
 	}
 
 	// Computes both the likelihood and the gradient
@@ -86,14 +84,33 @@ public class SVMTest extends Model {
 		return (new CompactGradientOutput(likelihood, gradient));
 	}
 	
+	public CompactGradientOutput stochasticGradientEval() {
+		double alpha, y;
+		double likelihood = 0, temp;
+		double x[];
+		double gradient[] = new double[nDim];
+		
+		for (int i : currBatchIdx) {
+			x = data[i];
+			y = classes[i];
+			alpha = Array.dotProduct(x, theta);
+			temp = Math.max(0.0, 1 - y*alpha);
+			likelihood += temp*temp;
+			if (y*alpha < 1.0) {
+				gradient = Array.addScalarMultiply(gradient, -1, Array.scalarMultiply(data[i], y*(1 - y*alpha)));
+			}
+		}
+		likelihood /= 2*currBatchIdx.length;						// Normalize by the number of data points
+		likelihood += lambda*Array.dotProduct(theta, theta)/2;		// Add regularization
+		gradient = Array.scalarMultiply(gradient, 1/((double) currBatchIdx.length));
+		gradient = Array.addScalarMultiply(gradient, lambda, theta);
+		
+		return (new CompactGradientOutput(likelihood, gradient));
+	}
+	
 	public CompactGradientOutput evaluate(double[] theta) {			//Overloaded operator for easy function calling
 		setParams(theta);
 		return evaluate();
-	}
-
-	@Override
-	public int getNFeatures() {
-		return nDim;
 	}
 	
 	@Override
@@ -102,7 +119,7 @@ public class SVMTest extends Model {
 	}
 
 	@Override
-	public double[] getPositionVector() {
+	public double[] getParams() {
 		return Array.clone(theta);
 	}
 
@@ -119,11 +136,5 @@ public class SVMTest extends Model {
 	@Override
 	public CompactGradientOutput getGradient() {
 		return evaluate();
-	}
-
-	@Override
-	//TODO: Fix
-	public Fit generateFit(double[] seed) {
-		return new Fit("Simple SVM", nDim, seed);
 	}
 }

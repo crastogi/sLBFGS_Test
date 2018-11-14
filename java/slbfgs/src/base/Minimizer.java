@@ -11,19 +11,14 @@ public class Minimizer {
 		return null;
 	}
 	
-	protected Model.CompactGradientOutput gradientEval(double[] input, 
-			boolean normalize) throws Exception {
-		double[] tempGradient;
-		Model.CompactGradientOutput out;
-		
+	protected Model.CompactGradientOutput evaluate(double[] input) throws Exception {
 		model.setParams(input);
-		out 				= model.gradientEval();
-		//Handle the case where the gradient has not been defined
-		if (out==null)	throw new UnsupportedOperationException("The function "
-				+ "gradientEval() has not been defined!");
-		tempGradient		= out.gradientVector;
-		out.gradientVector	= tempGradient;
-		return out;	
+		return model.gradientEval();	
+	}
+	
+	protected Model.CompactGradientOutput stochasticEvaluate(double[] input) throws Exception {
+		model.setParams(input);
+		return model.stochasticGradientEval();
 	}
 	
 	protected void printStep(int iterations, int calls, double likelihood, 

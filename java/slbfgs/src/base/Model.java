@@ -1,90 +1,83 @@
 package base;
 
+import java.util.ArrayList;
+
 public abstract class Model {
-	public abstract int getNFeatures();
+	public int nDim = 0, N = 0, evaluatedDataPoints = 0;
+	public String fName = "N/A";
+	public int[] currBatchIdx;
+	private ArrayList<int[]> storedBatches = new ArrayList<int[]>();
+	private MersenneTwisterFast mtfast = new MersenneTwisterFast();
+	
+	public int getNFeatures() {
+		return nDim;
+	}
 
 	public abstract void setParams(double[] position);
 	
-	public abstract double[] getPositionVector();
+	public abstract double[] getParams();
  
 	public abstract double functionEval() throws Exception;
 	
 	public abstract CompactGradientOutput gradientEval() throws Exception;
 	
+	public abstract CompactGradientOutput stochasticGradientEval() throws Exception;
+	
 	public abstract CompactGradientOutput getGradient();
 	
-	public abstract Fit generateFit(double[] seed);
-	
-	//Central difference method
-	//startLoc is FULL dimensionality (NOT symmetry reduced)
-	public double[] gradientFiniteDifferences(double[] startLoc, double stepSize) {
-		int totFeatures		= this.getNFeatures();					//Operate in the FULL dimensionality space
-		double forwardDifference, reverseDifference;
-		double[] baseBetas, modBetas;
-		double[] fdGradient	= new double[totFeatures];
-		
-		baseBetas = Array.clone(startLoc);
-		//compute function values
-		for (int i=0; i<totFeatures; i++) {
-			try {
-				modBetas			= Array.clone(baseBetas);
-				modBetas[i]			+= stepSize;
-				forwardDifference	= functionEval();
-				modBetas[i]			-= 2*stepSize;
-				reverseDifference	= functionEval();
-				fdGradient[i]		= (forwardDifference-reverseDifference)/(2*stepSize);
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
-		setParams(startLoc);
-		return fdGradient;
+	public Fit generateFit(double[] seed) {
+		return new Fit(fName, nDim, seed);
 	}
 	
-	//Central difference method
-	public double[][] hessianFiniteDifferences(double[] startLoc, double stepSize) {
-		int totFeatures 			= this.getNFeatures();
-		double[] baseBetas, modBetas;
-		double[][] forwardDifference= new double[totFeatures][totFeatures];
-		double[][] reverseDifference= new double[totFeatures][totFeatures];
-		double[][] fdHessian		= new double[totFeatures][totFeatures];
-        CompactGradientOutput output;
+	public void sampleBatch(int k) {
+		int nBatches, randIdx, temp;
+		int[] shuffledIdx, tempBatch;
 		
-		baseBetas = Array.clone(startLoc);
-		//compute gradients
-		for (int i=0; i<totFeatures; i++) {
-			try {
-				modBetas			= Array.clone(baseBetas);
-				modBetas[i]			+= stepSize;
-				setParams(modBetas);
-				output				= gradientEval();
-				//Handle the case where the gradient has not been defined
-				if (output==null)	throw new UnsupportedOperationException(
-						"The function gradientEval() has not been defined!");
-				forwardDifference[i]= output.gradientVector;
-				modBetas[i]			-= 2*stepSize;
-				setParams(modBetas);
-				output				= gradientEval();
-				reverseDifference[i]= output.gradientVector;
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+		if (k>N) {
+			throw new IllegalArgumentException("Cannot sample a batch that is larger than the dataset!");
 		}
-		//Find finite differences (forward/backward FD)
-		for (int i=0; i<totFeatures; i++) {
-			for (int j=0; j<totFeatures; j++) {
-				fdHessian[i][j] = (forwardDifference[j][i]-reverseDifference[j][i])/(4*stepSize) + 
-									(forwardDifference[i][j]-reverseDifference[i][j])/(4*stepSize);
-			}
+		// Ensure that batches exist and that they are of the expected length
+		if (storedBatches.size()!=0 && storedBatches.get(0).length==k) {
+			currBatchIdx = storedBatches.get(0);
+			storedBatches.remove(0);
+			return;
+		} 
+		// Else, generate a new set of batches
+		nBatches = (int) Math.floor( ((double) N)/((double) k) );
+		shuffledIdx = new int[N];
+		
+		// Begin by populating the array
+		for (int i=0; i<N; i++) {
+			shuffledIdx[i] = i;
 		}
-		setParams(startLoc);
-		return fdHessian;
+		
+		// Now shuffle
+		for (int i=N-1; i>0; i--) {
+			randIdx = mtfast.nextInt(i+1);
+			// Swap at index
+			temp = shuffledIdx[randIdx];
+			shuffledIdx[randIdx] = shuffledIdx[i];
+			shuffledIdx[i] = temp;
+		}
+		
+		// Create batches and store
+		for (int i=0; i<nBatches; i++) {
+			tempBatch = new int[k];
+			for (int j=0; j<k; j++) {
+				tempBatch[j] = shuffledIdx[i*k+j];
+			}
+			storedBatches.add(tempBatch);
+		}
+		
+		// set idx and exit
+		currBatchIdx = storedBatches.get(0);
+		storedBatches.remove(0);
+		return;
 	}
 	
 	public class CompactGradientOutput {
-		public double functionValue		= 0;
+		public double functionValue = 0;
 		public double[] gradientVector;
-		public double[][] hessian;
 
 		public CompactGradientOutput(double functionValue, double[] gradientVector) {
 			this.functionValue	= functionValue;
@@ -93,21 +86,6 @@ public abstract class Model {
 		
 		public CompactGradientOutput(double[] gradientVector) {
 			this.gradientVector	= gradientVector;
-		}
-		
-		public CompactGradientOutput(double functionValue, double[] gradientVector, double[][] hessian) {
-			this.functionValue	= functionValue;
-			this.gradientVector	= gradientVector;
-			this.hessian		= hessian;
-		}
-		
-		public CompactGradientOutput(double[] gradientVector, double[][] hessian) {
-			this.gradientVector	= gradientVector;
-			this.hessian		= hessian;
-		}
-		
-		public CompactGradientOutput(double[][] hessian) {
-			this.hessian		= hessian;
 		}
 	}
 }

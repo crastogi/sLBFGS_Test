@@ -1,12 +1,10 @@
 package test;
 
 import base.Array;
-import base.Fit;
 import base.Model;
 
 public class MinimizerTestFunctions extends Model {
 	public int functionType;							//The type of function this Functions Object will represent
-	public int nDim;									//The number of dimensions for this space
 	public double[] x;									//The vector storing the x vector for current evaluation
 
 	private int maxFunctions = 5;						//The maximum number of functions within this class.
@@ -21,6 +19,18 @@ public class MinimizerTestFunctions extends Model {
 		this.functionType	= functionType;				//Stores values for the type of function
 		this.nDim			= nDim;						//And the number of dimensions
 		x = new double[nDim];
+		
+		switch (functionType) {
+		case 1:		fName = "Rosenbrock Function";
+					break;
+		case 2:		fName = "Multi-dimensional Sphere";
+					break;
+		case 3:		fName = "Beale's Function";
+					break;
+		case 4:		fName = "Matya's Function";
+					break;
+		case 5:		fName = "Goldstien-Price Function";
+		}
 	}
 	
 	public CompactGradientOutput evaluate() {
@@ -131,17 +141,12 @@ public class MinimizerTestFunctions extends Model {
 	}
 
 	@Override
-	public int getNFeatures() {
-		return nDim;
-	}
-	
-	@Override
 	public void setParams(double[] position) {
 		x = Array.clone(position);
 	}
 
 	@Override
-	public double[] getPositionVector() {
+	public double[] getParams() {
 		return Array.clone(x);
 	}
 
@@ -158,24 +163,5 @@ public class MinimizerTestFunctions extends Model {
 	@Override
 	public CompactGradientOutput getGradient() {
 		return evaluate();
-	}
-
-	@Override
-	public Fit generateFit(double[] seed) {
-		String fName = null;
-		
-		switch (functionType) {
-		case 1:		fName = "Rosenbrock Function";
-					break;
-		case 2:		fName = "Multi-dimensional Sphere";
-					break;
-		case 3:		fName = "Beale's Function";
-					break;
-		case 4:		fName = "Matya's Function";
-					break;
-		case 5:		fName = "Goldstien-Price Function";
-		}
-		
-		return new Fit(fName, nDim, seed);
 	}
 }

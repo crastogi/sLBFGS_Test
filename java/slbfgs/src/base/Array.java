@@ -487,6 +487,14 @@ public class Array {
 		return output;
 	}
 	
+	public static double[] scalarMultiply(int[] input, double scalar) {
+		double[] output = new double[input.length];
+		for (int i=0; i<input.length; i++) {
+			output[i] = input[i]*scalar;
+		}
+		return output;
+	}
+	
 	public static double[][] scalarMultiply(double[][] input, double scalar) {
 		double[][] output = new double[input.length][input[0].length];
 		

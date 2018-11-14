@@ -58,10 +58,10 @@ public class LBFGS extends Minimizer{
 
 		tStart	= System.currentTimeMillis();
 		xCurr	= Array.clone(xInput);
-		fOut	= gradientEval(xCurr, true);
+		fOut	= evaluate(xCurr);
 		fCurr	= fOut.functionValue;
 		gCurr	= fOut.gradientVector;
-		fitOutput.addStep(model.getPositionVector());
+		fitOutput.addStep(model.getParams());
 		nFunctionEvals++;
 		if (Array.norm(gCurr)/Math.max(1, Array.norm(xCurr)) < epsilon) {
 			System.out.println("Already at minimum!");
@@ -81,7 +81,7 @@ public class LBFGS extends Minimizer{
 		s[0]		= Array.subtract(xNext, xCurr);
 		y[0]		= Array.subtract(gNext, gCurr);
 		iteration++;
-		fitOutput.addStep(model.getPositionVector());
+		fitOutput.addStep(model.getParams());
 		if (trajectoryFile!=null)	fitOutput.printTrajectories(trajectoryFile, true);
 		if (isVerbose) {
 			System.out.println("Starting Function Value: "+fCurr);
@@ -121,7 +121,7 @@ public class LBFGS extends Minimizer{
 			iteration++;
 			if (Array.norm(gNext)/Math.max(1, Array.norm(xNext)) <= epsilon) {
 				tStart	= (System.currentTimeMillis()-tStart)/1000;
-				fitOutput.addStep(model.getPositionVector());
+				fitOutput.addStep(model.getParams());
 				if (trajectoryFile!=null)	fitOutput.printTrajectories(trajectoryFile, true);
 				if (isVerbose)	printStep(iteration, nFunctionEvals, fNext, Array.norm(s[0]), alphaCurr, Array.norm(gNext));
 				System.out.println("Convergence criteria met.");
@@ -132,7 +132,7 @@ public class LBFGS extends Minimizer{
 			s			= cycleDown(s, Array.subtract(xNext, xCurr));
 			y			= cycleDown(y, Array.subtract(gNext, gCurr));
 			
-			fitOutput.addStep(model.getPositionVector());
+			fitOutput.addStep(model.getParams());
 			if (trajectoryFile!=null)	fitOutput.printTrajectories(trajectoryFile, true);
 			if (isVerbose)	printStep(iteration, nFunctionEvals, fNext, Array.norm(s[0]), alphaCurr, Array.norm(gNext));
 		}
@@ -174,7 +174,7 @@ public class LBFGS extends Minimizer{
 		
 		while (nLSEvals<=maxLSIterations) {
 			//Evaluate function
-			fOut= gradientEval(Array.addScalarMultiply(x0, alphaT, pCurr), true);
+			fOut= evaluate(Array.addScalarMultiply(x0, alphaT, pCurr));
 			fT	= fOut.functionValue;
 			gT	= Array.dotProduct(fOut.gradientVector, pCurr);
 			nLSEvals++;
@@ -184,7 +184,7 @@ public class LBFGS extends Minimizer{
 			if (Double.isNaN(fT)) {
 				System.err.println("NaN ERROR!");
 				pCurr	= Array.normalize(pCurr);
-				fOut	= gradientEval(Array.addScalarMultiply(x0, alphaT, pCurr), true);
+				fOut	= evaluate(Array.addScalarMultiply(x0, alphaT, pCurr));
 				fT		= fOut.functionValue;
 				gT		= Array.dotProduct(fOut.gradientVector, pCurr);
 				nFunctionEvals++;
@@ -403,7 +403,7 @@ public class LBFGS extends Minimizer{
 		}
 		
 		while (nLSEvals<=maxLSIterations) {
-			fOut = gradientEval(Array.addScalarMultiply(x0, alphaNew, pCurr), true);
+			fOut = evaluate(Array.addScalarMultiply(x0, alphaNew, pCurr));
 			fNew = fOut.functionValue;
 			gNew = Array.dotProduct(fOut.gradientVector, pCurr);
 			nFunctionEvals++;
@@ -442,7 +442,7 @@ public class LBFGS extends Minimizer{
 				throw new Exception("Line search failure: step alpha guess is out of bounds! alphaJ: "+alphaJ);
 			}
 			
-			fOut= gradientEval(Array.addScalarMultiply(x0, alphaJ, pCurr), true);
+			fOut= evaluate(Array.addScalarMultiply(x0, alphaJ, pCurr));
 			fJ	= fOut.functionValue;
 			gJ	= Array.dotProduct(fOut.gradientVector, pCurr);
 			nLSEvals++;

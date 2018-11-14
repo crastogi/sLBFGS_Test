@@ -25,7 +25,7 @@ public class Fit {
 		this.functionCalls = functionCalls;
 		this.fitTime = fitTime;
 		this.likelihood = likelihood;
-		this.finalPosition = input.getPositionVector();
+		this.finalPosition = input.getParams();
 	}
 		
 	public double[] positionVector() {

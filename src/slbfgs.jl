@@ -203,7 +203,7 @@ function slbfgs(loss::Function, grad!::Function, hvp!::Function, data::Matrix, w
 
       # Compute next iteration step (line 10)
       x_t_hist[t,:] = copy(x_t)				# Need to store the history of iteration steps
-      if r > 1								# After one Hessian correction, need the two-loop recursion product
+      if r > 0								# After one Hessian correction, need the two-loop recursion product
         x_t += -eta * mvp(IH_hist, v_t, delta)
       else									# H_0 = I, so update will be simpler
         x_t += -eta*v_t
