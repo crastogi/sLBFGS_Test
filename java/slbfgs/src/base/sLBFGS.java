@@ -56,7 +56,9 @@ public class sLBFGS extends Minimizer{
 		double[] grad_f_xt, grad_f_wk;				// Components of the variance reduced gradient v_t
 		InverseHessian IH = new InverseHessian();	// Initialize a new inverse hessian object
 		ArrayList<double[]> x_t_hist;				// Stores the history of all previous steps in the current epoch
-		Random generator = new Random();			
+		Random generator = new Random();		
+		
+		double[] tempVec;
 		
 		// Deal with a potential seed and initialize
 		if (seed!=null) {
@@ -108,13 +110,14 @@ public class sLBFGS extends Minimizer{
 			// Set x_t to current value of w_k
 			x_t = Array.clone(w_k);
 			
-			if (1/Array.norm(mu_k)/Math.max(1, Array.norm(x_t)) < maxEta) {
-				eta = eta/10;
-			} else {
-				if (eta < maxEta) {
-					eta = eta*10;
-				}
-			}
+			//TODO: Dynamic Eta test
+//			if (1/Array.norm(mu_k)/Math.max(1, Array.norm(x_t)) < maxEta) {
+//				eta = eta/10;
+//			} else {
+//				if (eta < maxEta) {
+//					eta = eta*10;
+//				}
+//			}
 			
 			// Perform m stochastic iterations before a full gradient computation takes place
 			for (int t=1; t<=m; t++) {
@@ -135,11 +138,23 @@ public class sLBFGS extends Minimizer{
 				
 				// Compute next iteration step
 				x_t_hist.add(Array.clone(x_t));		// Need to store the history of iteration steps
+//				if (r < 1) {						// Until a single hessian correction has taken place, H_0 = I
+//					x_t = Array.addScalarMultiply(x_t, -eta, v_t);
+//				} else {							// Compute the two-loop recursion product
+//					x_t = Array.addScalarMultiply(x_t, -eta, twoLoopRecursion(IH, v_t));
+//				}
+				
 				if (r < 1) {						// Until a single hessian correction has taken place, H_0 = I
-					x_t = Array.addScalarMultiply(x_t, -eta, v_t);
+					tempVec = v_t;
 				} else {							// Compute the two-loop recursion product
-					x_t = Array.addScalarMultiply(x_t, -eta, twoLoopRecursion(IH, v_t));
+					tempVec = twoLoopRecursion(IH, v_t);
 				}
+				double tvNorm = Array.norm(tempVec);
+				double divisor = 1;
+				while (tvNorm/divisor > 100) {
+					divisor *= 10;
+				}
+				x_t = Array.addScalarMultiply(x_t, -eta, Array.scalarMultiply(tempVec, 1/divisor));
 				
 				// Check to see if L iterations have passed (triggers hessian update)
 				if (t % L == 0) {
