@@ -18,7 +18,7 @@ public class sLBFGS extends Minimizer{
 	//LBFGS object constructor; load basic minimization parameters. To be used for all subsequent minimizations using this object.
 	public sLBFGS(Model model, int gradientBatch, int hessianBatch, int memorySize, 
 			int maxEpoch, int hessianPeriod, int epochIterations, double stepsize,
-			double delta, boolean isVerbose) {
+			double epsilon, double delta, boolean isVerbose) {
 		this.model		= model;
 		d				= model.getNFeatures();
 		N				= model.N;				// Number of data points 
@@ -36,6 +36,8 @@ public class sLBFGS extends Minimizer{
 		m				= epochIterations;		// Number of iterations to run per epoch
 		if (stepsize<=0) throw new IllegalArgumentException("Eta (step size) must be greater than 0!");
 		eta				= stepsize;				// The fixed step size value
+		if (epsilon<0) throw new IllegalArgumentException("Epsilon cannot be negative!");
+		this.epsilon	= epsilon;				// The accuracy with which the solution needs to be found
 		if (delta<0) throw new IllegalArgumentException("Delta (inverse hessian regularization parameter) cannot be negative!");
 		this.delta		= delta;				// An optional inverse hessian regularization parameter
 		this.isVerbose	= isVerbose;
@@ -80,6 +82,18 @@ public class sLBFGS extends Minimizer{
 		for (int k=0; k<maxEpoch; k++) {
 			// Compute full gradient for variance reduction
 			fOut = evaluate(w_k);
+			// Check for convergence
+			if (Array.norm(fOut.gradientVector)/Math.max(1, Array.norm(w_k)) < epsilon) {
+				System.out.println("converged");
+				fitOutput.recordFit(0, 0, tStart, fOut.functionValue, model);
+				System.out.println("Total time consumed: "+(System.nanoTime()-tStart)/1E9);
+				System.out.println("IH Time consumed: "+IHTime);
+				System.out.println("Two Loop Time consumed: "+TwoLoopTime);
+				System.out.println("Batch Sampling Time consumed: "+model.SampleTime);
+				System.out.println("Stochastic Gradient Time consumed: "+model.StochasticTime);
+				return fitOutput;
+			}
+			
 			//TODO: Fix printing out of update steps
 			// Print some information about the current epoch
 			if (isVerbose) {
@@ -127,8 +141,8 @@ public class sLBFGS extends Minimizer{
 					s_r = Array.subtract(u_r, u_r_prev);
 					// Compute y_r estimate using HVP
 					//TODO: turn fd movement step here into a tunable parameter
-					y_r = Array.subtract(stochasticEvaluate(Array.addScalarMultiply(u_r, 1e-3, s_r)).gradientVector, 
-							stochasticEvaluate(Array.addScalarMultiply(u_r, -1e-3, s_r)).gradientVector);
+					y_r = Array.subtract(stochasticEvaluate(Array.addScalarMultiply(u_r, 1e-2, s_r)).gradientVector, 
+							stochasticEvaluate(Array.addScalarMultiply(u_r, -1e-2, s_r)).gradientVector);
 					y_r = Array.scalarMultiply(y_r, 1.0/(2*1e-3));
 					// Store latest values of s_r and y_r
 					IH.add(s_r, y_r);

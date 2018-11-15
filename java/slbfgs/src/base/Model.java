@@ -1,6 +1,5 @@
 package base;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 
@@ -12,7 +11,6 @@ public abstract class Model {
 	public int nDim = 0, N = 0, evaluatedDataPoints = 0;
 	public String fName = "N/A";
 	public int[] currBatchIdx;
-	private ArrayList<int[]> storedBatches = new ArrayList<int[]>();
 	private MersenneTwisterFast mtfast = new MersenneTwisterFast();
 	
 	public int getNFeatures() {

@@ -1,12 +1,8 @@
 package test;
 
-import java.util.ArrayList;
-
-import base.Array;
 import base.Fit;
 import base.LBFGS;
 import base.Minimizer;
-import base.Model;
 import base.sLBFGS;
 
 public class GenericTestFile {
@@ -28,7 +24,7 @@ public class GenericTestFile {
 		}
 		System.out.println(fit.likelihood);
 	
-		min = new sLBFGS(svm, 20, 200, 10, 30, 10, 500, 0.1, 0, true);
+		min = new sLBFGS(svm, 20, 200, 10, 30, 10, 500, 0.1, 1E-5, 0, true);
 		
 		try {
 			fit = min.doMinimize(null, null);
