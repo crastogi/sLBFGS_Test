@@ -1,18 +1,17 @@
 package base;
 
 import java.util.ArrayList;
+import java.util.Random;
 
 public class sLBFGS extends Minimizer{
-	private boolean isVerbose;
+	private boolean isVerbose, randomSelect = false;
 	private int d, N, b, bH, M, m, L, maxEpoch;
-	private double eta, delta;
+	private double eta, delta, fdHVPStepSize = 5E-3, maxEta = 0.01;
 	private Fit fitOutput;
 	private Model.CompactGradientOutput fOut;
 	
 	private double IHTime = 0, TwoLoopTime = 0;
 
-	//TODO: Add convergence criteria cutoff!
-	//TODO: Include option to toggle randomized selection of final point!
 	//TODO: Test the total number of passes over data points!
 	
 	//LBFGS object constructor; load basic minimization parameters. To be used for all subsequent minimizations using this object.
@@ -57,6 +56,7 @@ public class sLBFGS extends Minimizer{
 		double[] grad_f_xt, grad_f_wk;				// Components of the variance reduced gradient v_t
 		InverseHessian IH = new InverseHessian();	// Initialize a new inverse hessian object
 		ArrayList<double[]> x_t_hist;				// Stores the history of all previous steps in the current epoch
+		Random generator = new Random();			
 		
 		// Deal with a potential seed and initialize
 		if (seed!=null) {
@@ -73,7 +73,7 @@ public class sLBFGS extends Minimizer{
 		v_t = new double[d];
 		u_r = new double[d];
 		u_r_prev = new double[d];
-//		x_t_hist = new ArrayList<double[]>();
+		x_t_hist = new ArrayList<double[]>();
 		
 		// Loop over epochs 
 		System.out.println("Epochs   Data Loops           Likelihood"
@@ -83,6 +83,7 @@ public class sLBFGS extends Minimizer{
 			// Compute full gradient for variance reduction
 			fOut = evaluate(w_k);
 			// Check for convergence
+			//TODO: Improve final output!
 			if (Array.norm(fOut.gradientVector)/Math.max(1, Array.norm(w_k)) < epsilon) {
 				System.out.println("converged");
 				fitOutput.recordFit(0, 0, tStart, fOut.functionValue, model);
@@ -107,6 +108,14 @@ public class sLBFGS extends Minimizer{
 			// Set x_t to current value of w_k
 			x_t = Array.clone(w_k);
 			
+			if (1/Array.norm(mu_k)/Math.max(1, Array.norm(x_t)) < maxEta) {
+				eta = eta/10;
+			} else {
+				if (eta < maxEta) {
+					eta = eta*10;
+				}
+			}
+			
 			// Perform m stochastic iterations before a full gradient computation takes place
 			for (int t=1; t<=m; t++) {
 				// Compute the current stochastic gradient estimate.
@@ -117,11 +126,15 @@ public class sLBFGS extends Minimizer{
 				grad_f_xt = stochasticEvaluate(x_t).gradientVector;
 				grad_f_wk = stochasticEvaluate(w_k).gradientVector;
 				v_t = Array.subtract(Array.add(grad_f_xt, mu_k), grad_f_wk);
+				
+//				System.out.print("k: "+k+", t: "+t+", r: "+r+", conv.criteria: "+Array.norm(v_t)/Math.max(1, Array.norm(x_t))+", eta: "+eta+", x_t: ");
+//				Array.print(Array.cat(Array.cat(x_t, w_k), v_t));
+				
 				// Update u_r with current position
 				u_r = Array.add(u_r, x_t);
 				
 				// Compute next iteration step
-//				x_t_hist.add(Array.clone(x_t));		// Need to store the history of iteration steps
+				x_t_hist.add(Array.clone(x_t));		// Need to store the history of iteration steps
 				if (r < 1) {						// Until a single hessian correction has taken place, H_0 = I
 					x_t = Array.addScalarMultiply(x_t, -eta, v_t);
 				} else {							// Compute the two-loop recursion product
@@ -140,9 +153,8 @@ public class sLBFGS extends Minimizer{
 					// Compute s_r update
 					s_r = Array.subtract(u_r, u_r_prev);
 					// Compute y_r estimate using HVP
-					//TODO: turn fd movement step here into a tunable parameter
-					y_r = Array.subtract(stochasticEvaluate(Array.addScalarMultiply(u_r, 1e-2, s_r)).gradientVector, 
-							stochasticEvaluate(Array.addScalarMultiply(u_r, -1e-2, s_r)).gradientVector);
+					y_r = Array.subtract(stochasticEvaluate(Array.addScalarMultiply(u_r, fdHVPStepSize, s_r)).gradientVector, 
+							stochasticEvaluate(Array.addScalarMultiply(u_r, -fdHVPStepSize, s_r)).gradientVector);
 					y_r = Array.scalarMultiply(y_r, 1.0/(2*1e-3));
 					// Store latest values of s_r and y_r
 					IH.add(s_r, y_r);
@@ -152,13 +164,15 @@ public class sLBFGS extends Minimizer{
 			        u_r = new double[d];
 				}
 			}
-			//TODO: provide option for selecting between this and random selection
-			w_k = Array.clone(x_t);
-//			x_t_hist = new ArrayList<double[]>();
+			// Choose either the last position vector x_t or a random one from the previous epoch as the starting point for the next
+			if (randomSelect) {
+				w_k = Array.clone(x_t_hist.get(generator.nextInt(m)));
+			} else {
+				w_k = Array.clone(x_t);
+			}
+			x_t_hist = new ArrayList<double[]>();
 			tEpochEnd = System.nanoTime();
 		}
-		//TODO: Find way to complain about not converging if all epochs are exhausted!
-		
 		// Compute full gradient for variance reduction
 		fOut = evaluate(w_k);
 		//TODO: Fix printing out of update steps
@@ -166,13 +180,7 @@ public class sLBFGS extends Minimizer{
 		if (isVerbose) {
 			printStep(maxEpoch, model.evaluatedDataPoints/N, fOut.functionValue, Array.norm(Array.subtract(w_k, w_k_prev)));
 		}
-		fitOutput.recordFit(0, 0, tStart, fOut.functionValue, model);
-		System.out.println("Total time consumed: "+(System.nanoTime()-tStart)/1E9);
-		System.out.println("IH Time consumed: "+IHTime);
-		System.out.println("Two Loop Time consumed: "+TwoLoopTime);
-		System.out.println("Batch Sampling Time consumed: "+model.SampleTime);
-		System.out.println("Stochastic Gradient Time consumed: "+model.StochasticTime);
-		return fitOutput;
+		throw new Exception("sLBFGS Failure: maximum epochs exceeded without convergence!");
 	}
 	
 	private double[] twoLoopRecursion(InverseHessian IH, double[] v_t) {
