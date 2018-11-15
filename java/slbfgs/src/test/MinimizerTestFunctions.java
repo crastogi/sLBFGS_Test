@@ -18,6 +18,7 @@ public class MinimizerTestFunctions extends Model {
 		}
 		this.functionType	= functionType;				//Stores values for the type of function
 		this.nDim			= nDim;						//And the number of dimensions
+		N					= 1;						//There is no 'stochastic' behavior here
 		x = new double[nDim];
 		
 		switch (functionType) {
@@ -50,8 +51,7 @@ public class MinimizerTestFunctions extends Model {
 		return output;
 	}
 	
-	public CompactGradientOutput evaluate(double[] x) {			//Overloaded operator for easy function calling
-		setParams(x);
+	public CompactGradientOutput stochasticEvaluate() throws Exception {
 		return evaluate();
 	}
 	
@@ -131,7 +131,7 @@ public class MinimizerTestFunctions extends Model {
 	private CompactGradientOutput sphere() {					//sphere function 
 		double functionValue		= 0;
 		double[] functionGradient	= new double[nDim];
-		
+				
 		for (int j=0; j<nDim; j++) {
 			functionValue += x[j]*x[j];
 			functionGradient[j] = 2*x[j];
@@ -148,20 +148,5 @@ public class MinimizerTestFunctions extends Model {
 	@Override
 	public double[] getParams() {
 		return Array.clone(x);
-	}
-
-	@Override
-	public double functionEval() throws Exception {
-		return evaluate().functionValue;
-	}
-
-	@Override
-	public CompactGradientOutput gradientEval() throws Exception {
-		return evaluate();
-	}
-
-	@Override
-	public CompactGradientOutput getGradient() {
-		return evaluate();
 	}
 }

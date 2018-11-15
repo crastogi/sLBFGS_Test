@@ -157,7 +157,7 @@ public class sLBFGS extends Minimizer{
 		System.out.println("IH Time consumed: "+IHTime);
 		System.out.println("Two Loop Time consumed: "+TwoLoopTime);
 		System.out.println("Batch Sampling Time consumed: "+model.SampleTime);
-		System.out.println("Stochastic Gradient Time consumed: "+GradientTime);
+		System.out.println("Stochastic Gradient Time consumed: "+model.StochasticTime);
 		return fitOutput;
 	}
 	
@@ -176,7 +176,7 @@ public class sLBFGS extends Minimizer{
 		for (int i=currMemDepth-1; i>=0; i--) {
 			// Compute and store alpha_i = rho_u*s_i*q
 			alpha = IH.rho.get(i)*Array.dotProduct(IH.s.get(i), q);
-			alphas[currMemDepth - 1 - i] = alpha;
+			alphas[i] = alpha;
 			// Update q: q = q - alpha_i*y_i
 			q = Array.addScalarMultiply(q, -alpha, IH.y.get(i));
 		}

@@ -28,7 +28,7 @@ public class GenericTestFile {
 		}
 		System.out.println(fit.likelihood);
 	
-		min = new sLBFGS(svm, 10, 100, 10, 30, 10, 1000, 0.01, 0, true);
+		min = new sLBFGS(svm, 20, 200, 10, 30, 10, 500, 0.1, 0, true);
 		
 		try {
 			fit = min.doMinimize(null, null);
