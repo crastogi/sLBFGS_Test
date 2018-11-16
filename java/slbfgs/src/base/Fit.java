@@ -6,8 +6,8 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 
 public class Fit {
-	public int fitSteps, functionCalls, nDim;
-	public double fitTime, likelihood;
+	public int fitSteps, functionCalls, nDim, dataPoints;
+	public double fitTime, likelihood, dataLoops;
 	public String functionType;
 	public double[] seed						= null;
 	public double[] finalPosition				= null;
@@ -26,6 +26,8 @@ public class Fit {
 		this.fitTime = fitTime;
 		this.likelihood = likelihood;
 		this.finalPosition = input.getParams();
+		dataPoints = input.N;
+		dataLoops = ((double) input.evaluatedDataPoints)/((double) input.N);
 	}
 		
 	public double[] positionVector() {

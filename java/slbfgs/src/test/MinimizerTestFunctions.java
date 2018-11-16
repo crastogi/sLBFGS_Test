@@ -48,6 +48,7 @@ public class MinimizerTestFunctions extends Model {
 						break;
 			case 5:		output = goldstien();
 		}
+		evaluatedDataPoints++;
 		return output;
 	}
 	

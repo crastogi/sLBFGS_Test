@@ -55,8 +55,9 @@ public class LBFGS extends Minimizer{
 			xInput = Array.scalarMultiply(Array.randomDouble(nDim), randomSeedScale);
 		}
 		fitOutput = model.generateFit(seed);
+		model.evaluatedDataPoints = 0;
 
-		tStart	= System.currentTimeMillis();
+		tStart	= System.nanoTime();
 		xCurr	= Array.clone(xInput);
 		fOut	= evaluate(xCurr);
 		fCurr	= fOut.functionValue;
@@ -65,7 +66,7 @@ public class LBFGS extends Minimizer{
 		nFunctionEvals++;
 		if (Array.norm(gCurr)/Math.max(1, Array.norm(xCurr)) < epsilon) {
 			System.out.println("Already at minimum!");
-			tStart	= (System.currentTimeMillis()-tStart)/1000;
+			tStart	= (System.nanoTime()-tStart)/1E9;
 			fitOutput.recordFit(iteration, nFunctionEvals, tStart, fCurr, model);
 			return fitOutput;
 		}
@@ -120,7 +121,7 @@ public class LBFGS extends Minimizer{
 			gNext		= fOut.gradientVector;
 			iteration++;
 			if (Array.norm(gNext)/Math.max(1, Array.norm(xNext)) <= epsilon) {
-				tStart	= (System.currentTimeMillis()-tStart)/1000;
+				tStart	= (System.nanoTime()-tStart)/1E9;
 				fitOutput.addStep(model.getParams());
 				if (trajectoryFile!=null)	fitOutput.printTrajectories(trajectoryFile, true);
 				if (isVerbose)	printStep(iteration, nFunctionEvals, fNext, Array.norm(s[0]), alphaCurr, Array.norm(gNext));

@@ -40,7 +40,7 @@ public class SVMTest extends Model {
             	parsed.add(temp);
             }
         	// Store values in data
-        	N = 10000; //parsed.size();
+        	N = 10000; 
         	data = new double[N][maxCols-1];
         	classes = new double[N];
         	for (int i=0; i<N; i++) {
@@ -80,6 +80,7 @@ public class SVMTest extends Model {
 		likelihood += lambda*Array.dotProduct(theta, theta)/2;		// Add regularization
 		gradient = Array.scalarMultiply(gradient, 1/((double) N));
 		gradient = Array.addScalarMultiply(gradient, lambda, theta);
+		evaluatedDataPoints += N;
 		
 		return (new CompactGradientOutput(likelihood, gradient));
 	}
@@ -106,6 +107,7 @@ public class SVMTest extends Model {
 		likelihood += lambda*Array.dotProduct(theta, theta)/2;		// Add regularization
 		gradient = Array.scalarMultiply(gradient, 1/((double) currBatchIdx.length));
 		gradient = Array.addScalarMultiply(gradient, lambda, theta);
+		evaluatedDataPoints += currBatchIdx.length;
 		
 		StochasticTime += (System.nanoTime()-tStart)/1E9; 
 		
