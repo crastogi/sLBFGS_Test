@@ -4,10 +4,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 
 public abstract class Model {
-	
-	public double SampleTime = 0;
-	public double StochasticTime = 0;
-	
 	public int nDim = 0, N = 0, evaluatedDataPoints = 0;
 	public String fName = "N/A";
 	public int[] currBatchIdx;
@@ -30,8 +26,6 @@ public abstract class Model {
 	}
 	
 	public void sampleBatch(int k) {
-		double tStart = System.nanoTime();
-		
 		int idx = 0;
 		currBatchIdx = new int[k];
 		HashSet<Integer> h = new HashSet<Integer>();
@@ -47,9 +41,6 @@ public abstract class Model {
         	currBatchIdx[idx] = i.next();
         	idx++;
         }
-        
-		SampleTime += (System.nanoTime()-tStart)/1E9;
-		
 		return;
 	}
 	

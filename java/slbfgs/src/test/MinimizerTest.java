@@ -30,7 +30,7 @@ public class MinimizerTest {
 		PrintStream nullStream  = new PrintStream(new NullOutputStream());  
 		
 		//Loop over function types
-		for (int fType = 1; fType<=5; fType++) {
+		for (int fType = 1; fType<=0; fType++) {
 			//Initialize test functions
 			MinimizerTestFunctions testFunc = new MinimizerTestFunctions(fType, dimensionality);
 			Fit fit = null;
@@ -168,6 +168,7 @@ public class MinimizerTest {
 		System.out.println("Iterations:    \t"+iterations[0]+"\t\t"+iterations[1]);
 		System.out.println("Data Loops:    \t"+dataLoops[0]+"\t\t"+dataLoops[1]);
 		System.out.println("\n");
+		System.out.println(fitTime[1]/fitTime[0]);
 	}
 	
 	private static class NullOutputStream extends OutputStream {

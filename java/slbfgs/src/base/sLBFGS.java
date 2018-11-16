@@ -5,13 +5,13 @@ import java.util.Random;
 
 public class sLBFGS extends Minimizer{
 	private boolean isVerbose, randomSelect = false;
-	private int d, N, b, bH, M, m, L, maxEpoch;
+	private int d, N, b, bH, M, m, L, currDepth, maxEpoch;
 	private double eta, delta, fdHVPStepSize = 5E-2, gradientNormBound = 100;
+	private double[] rho;
+	private double[][] s, y;
 	private Fit fitOutput;
 	private Model.CompactGradientOutput fOut;
 	
-	private double IHTime = 0, TwoLoopTime = 0;
-
 	//LBFGS object constructor; load basic minimization parameters. To be used for all subsequent minimizations using this object.
 	public sLBFGS(Model model, int gradientBatch, int hessianBatch, int memorySize, 
 			int maxEpoch, int hessianPeriod, int epochIterations, double stepsize,
@@ -42,19 +42,24 @@ public class sLBFGS extends Minimizer{
 	
 	public Fit doMinimize(double[] seed, String trajectoryFile) throws Exception {
 		int r = 0;									// Number of currently computed Hessian correction pairs
+		currDepth = 0;
 		double tStart, egNorm, divisor;
-		double[] v_t;								// Current and previous iteration's variance reduced gradient estimate
-		double[] u_r, u_r_prev, s_r;				// Average of path travelled in the current and previous inverse hessian updates
-		double[] mu_k;								// Full gradient for variance-reduced Gradient
-		double[] w_k, w_k_prev;						// Position in current epoch iteration
-		double[] x_t;								// Position in the current iteration
-		double[] y_r;
-		double[] grad_f_xt, grad_f_wk;				// Components of the variance reduced gradient v_t
-		double[] effGrad;
-		InverseHessian IH = new InverseHessian();	// Initialize a new inverse hessian object
-		ArrayList<double[]> x_t_hist;				// Stores the history of all previous steps in the current epoch
-		Random generator = new Random();		
-		
+		// Full gradient, variance reduced gradient, and components of variance reduced gradient
+		double[] mu_k = new double[d], v_t = new double[d], grad_f_xt = new double[d], grad_f_wk = new double[d];
+		// Effective gradient
+		double[] effGrad = new double[d];
+		// Positions in current iterations
+		double[] w_k = new double[d], w_k_prev = new double[d], x_t = new double[d];
+		// Average of path travelled in the current and previous inverse hessian updates
+		double[] u_r = new double[d], u_r_prev = new double[d];
+		// Components of two-loop update
+		double[] s_r = new double[d], y_r= new double[d];
+		rho = new double[M];
+		s = new double[M][d];
+		y = new double[M][d];
+		// Stores the history of all previous steps in the current epoch
+		ArrayList<double[]> x_t_hist = new ArrayList<double[]>();
+		Random generator = new Random();
 		
 		// Deal with a potential seed and initialize
 		if (seed!=null) {
@@ -68,10 +73,6 @@ public class sLBFGS extends Minimizer{
 		}
 		fitOutput = model.generateFit(seed);
 		w_k_prev = Array.clone(w_k);
-		v_t = new double[d];
-		u_r = new double[d];
-		u_r_prev = new double[d];
-		x_t_hist = new ArrayList<double[]>();
 			
 		// Init the number of loops over data points
 		model.evaluatedDataPoints = 0;
@@ -80,7 +81,6 @@ public class sLBFGS extends Minimizer{
 		for (int k=0; k<=maxEpoch; k++) {
 			// Compute full gradient for variance reduction
 			fOut = evaluate(w_k);
-			
 			// Print some information about the current epoch
 			if (isVerbose) {
 				if (k==0) {
@@ -97,19 +97,13 @@ public class sLBFGS extends Minimizer{
 			if (Double.isNaN(fOut.functionValue) || Double.isInfinite(fOut.functionValue)) {
 				throw new Exception("sLBFGS Failure: NaN encountered! Try reducing the step size...");
 			}
-			//TODO: Fix proper reporting
 			if (Array.norm(fOut.gradientVector)/Math.max(1, Array.norm(w_k)) < epsilon) {
 				fitOutput.recordFit(k, -1, (System.nanoTime()-tStart)/1E9, fOut.functionValue, model);
 				System.out.println("Convergence criteria met.");
-				System.out.println("Total time consumed: "+(System.nanoTime()-tStart)/1E9);
-				System.out.println("IH Time consumed: "+IHTime);
-				System.out.println("Two Loop Time consumed: "+TwoLoopTime);
-				System.out.println("Batch Sampling Time consumed: "+model.SampleTime);
-				System.out.println("Stochastic Gradient Time consumed: "+model.StochasticTime);
 				return fitOutput;
 			}
 			if (k==maxEpoch) {
-				break;			// This allows convergence to be tested on the FINAL epoch iteration
+				break;			// This allows convergence to be tested on the FINAL epoch iteration without computation
 			}
 
 			mu_k = Array.clone(fOut.gradientVector);		// Assign variance reduced gradient
@@ -131,7 +125,7 @@ public class sLBFGS extends Minimizer{
 				if (r < 1) {						// Until a single hessian correction has taken place, H_0 = I
 					effGrad = v_t;
 				} else {							// Compute the two-loop recursion product
-					effGrad = twoLoopRecursion(IH, v_t);
+					effGrad = twoLoopRecursion(v_t);
 				}			
 				// Bound the effective gradient update step
 				egNorm = Array.norm(effGrad);
@@ -157,7 +151,7 @@ public class sLBFGS extends Minimizer{
 							stochasticEvaluate(Array.addScalarMultiply(u_r, -fdHVPStepSize, s_r)).gradientVector);
 					y_r = Array.scalarMultiply(y_r, 1.0/(2*fdHVPStepSize));
 					// Store latest values of s_r and y_r
-					IH.add(s_r, y_r);
+					add(s_r, y_r);
 					
 					// Resetting u_r for next evaluation
 			        u_r_prev = Array.clone(u_r);
@@ -175,74 +169,65 @@ public class sLBFGS extends Minimizer{
 		throw new Exception("sLBFGS Failure: maximum epochs exceeded without convergence!");
 	}
 	
-	private double[] twoLoopRecursion(InverseHessian IH, double[] v_t) {
-		double tStart = System.nanoTime();
-		
-		int currMemDepth = IH.rho.size();
+	private double[] twoLoopRecursion(double[] v_t) {
 		double alpha, beta, gamma;
-		double[] q, r;
-		double[] alphas = new double[currMemDepth];
+		double[] q = new double[d], r = new double[d];
+		double[] alphas = new double[currDepth];
 		
 		// Begin by cloning the input gradient
 		q = Array.clone(v_t);
 		
-		// The first loop (starts from the latest entry and goes to the first)
-		for (int i=currMemDepth-1; i>=0; i--) {
+		// The first loop (starts from the latest entry and goes to the earliest)
+		for (int i=0; i<currDepth; i++) {
 			// Compute and store alpha_i = rho_u*s_i*q
-			alpha = IH.rho.get(i)*Array.dotProduct(IH.s.get(i), q);
+			alpha = rho[i]*Array.dotProduct(s[i], q);
 			alphas[i] = alpha;
 			// Update q: q = q - alpha_i*y_i
-			q = Array.addScalarMultiply(q, -alpha, IH.y.get(i));
-		}
-		
+			q = Array.addScalarMultiply(q, -alpha, y[i]);
+		}		
 		// Start computing R. To do so, begin by computing gamma_k = s_k*y_k/(y_k*y_k)
-		gamma = Array.dotProduct(IH.s.get(currMemDepth-1), IH.y.get(currMemDepth-1))/
-				Array.dotProduct(IH.y.get(currMemDepth-1), IH.y.get(currMemDepth-1));
+		gamma = Array.dotProduct(s[currDepth-1], y[currDepth-1])/
+				Array.dotProduct(y[currDepth-1], y[currDepth-1]);
 		// r = gamma_k*q/(1 + delta*gamma_k); the denominator includes the pseudo-hessian 
 		// regularization parameter delta NOTE: There is no need to multiply by I here, 
 		// as that will anyway produce a dot product 
 		r = Array.scalarMultiply(q, gamma/(1.0 + delta*gamma));
 		
-		// Second loop (goes in reverse, starting from the first entry)
-		for (int i=0; i<currMemDepth; i++) {
+		// Second loop (goes in reverse, starting from the earliest entry)
+		for (int i=currDepth-1; i>=0; i--) {
 			// beta = rho_i*y_i*r
-			beta = IH.rho.get(i)*Array.dotProduct(IH.y.get(i), r);
+			beta = rho[i]*Array.dotProduct(y[i], r);
 		    // r = r + s_i*(alpha_i-beta)
-			r = Array.addScalarMultiply(r, alphas[i]-beta, IH.s.get(i));
+			r = Array.addScalarMultiply(r, alphas[i]-beta, s[i]);
 		}
-		
-		TwoLoopTime += (System.nanoTime()-tStart)/1E9;
-		
 		return r;
 	}
 	
-	private class InverseHessian {
-		public ArrayList<Double> rho = new ArrayList<Double>();
-		public ArrayList<double[]> s = new ArrayList<double[]>();
-		public ArrayList<double[]> y = new ArrayList<double[]>();
-
-		public InverseHessian() {
-			// Do nothing
-		}
-		
-		public void add(double[] inS, double[] inY) {
-			double tStart = System.nanoTime();
-			
-			// Compute rho in the lbfgs two-loop method: rho_j = 1/s_j^T*y_j
-			double currRho = 1.0/Array.dotProduct(inS, inY);
-			
-			// Check to see if memory depth has been reached.
-			if (rho.size()==M) {
-				// Memory depth reached. remove oldest (first) values
-				rho.remove(0);
-				s.remove(0);
-				y.remove(0);
+	private void add(double[] inS, double[] inY) {
+		// Compute rho in the lbfgs two-loop method: rho_j = 1/s_j^T*y_j
+		cycleDown(rho, 1.0/Array.dotProduct(inS, inY));
+		// Add values to structure
+		cycleDown(s, inS);
+		cycleDown(y, inY);
+		currDepth = Math.min(currDepth+1, M);
+	}
+	
+	// Cycle rows in matrix downwards and add a new row on top
+	private void cycleDown(double[][] input, double[] newRow) {	
+		for (int i=input.length-1; i>0; i--) {
+			for (int j=0; j<input[0].length; j++) {
+				input[i][j] = input[i-1][j];
 			}
-			// Add values to structure
-			rho.add(currRho);
-			s.add(inS);
-			y.add(inY);
-			IHTime += (System.nanoTime()-tStart)/1E9;
 		}
+		for (int i=0; i<input[0].length; i++) {
+			input[0][i] = newRow[i];
+		}
+	}
+	
+	private void cycleDown(double[] input, double newValue) {	
+		for (int i=input.length-1; i>0; i--) {
+			input[i] = input[i-1];
+		}
+		input[0] = newValue;
 	}
 }

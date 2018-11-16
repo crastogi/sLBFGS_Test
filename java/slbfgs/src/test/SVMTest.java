@@ -86,8 +86,6 @@ public class SVMTest extends Model {
 	}
 	
 	public CompactGradientOutput stochasticEvaluate() {
-		double tStart = System.nanoTime();
-		
 		double alpha, y;
 		double likelihood = 0, temp;
 		double x[];
@@ -108,9 +106,6 @@ public class SVMTest extends Model {
 		gradient = Array.scalarMultiply(gradient, 1/((double) currBatchIdx.length));
 		gradient = Array.addScalarMultiply(gradient, lambda, theta);
 		evaluatedDataPoints += currBatchIdx.length;
-		
-		StochasticTime += (System.nanoTime()-tStart)/1E9; 
-		
 		return (new CompactGradientOutput(likelihood, gradient));
 	}
 	
