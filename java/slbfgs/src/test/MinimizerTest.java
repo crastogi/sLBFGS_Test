@@ -120,7 +120,7 @@ public class MinimizerTest {
 		}
 		
 		// Run SVM test. Begin with a convergent L-BFGS run
-		SVMTest svm = new SVMTest(0.001);
+		SVM svm = new SVM(0.001);
 		Minimizer min = new Minimizer();
 		Fit lbfgsFit = null, slbfgsFit = null;
 		fitTime = new double[2];
@@ -168,7 +168,6 @@ public class MinimizerTest {
 		System.out.println("Iterations:    \t"+iterations[0]+"\t\t"+iterations[1]);
 		System.out.println("Data Loops:    \t"+dataLoops[0]+"\t\t"+dataLoops[1]);
 		System.out.println("\n");
-		System.out.println(fitTime[1]/fitTime[0]);
 	}
 	
 	private static class NullOutputStream extends OutputStream {

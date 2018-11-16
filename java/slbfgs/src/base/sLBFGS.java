@@ -79,6 +79,7 @@ public class sLBFGS extends Minimizer{
 		tStart	= System.nanoTime();
 		// Loop over epochs 
 		for (int k=0; k<=maxEpoch; k++) {
+			fitOutput.addStep(w_k);
 			// Compute full gradient for variance reduction
 			fOut = evaluate(w_k);
 			// Print some information about the current epoch
