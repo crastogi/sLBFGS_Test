@@ -28,7 +28,7 @@ verbosity    = 0; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
 ff           = @noisyFunction;
 maxEpochs    = 1000;
 stochIters   = 5;
-testfunction = 6;  % choose among 3 test functions (1, 2, 3)
+testfunction = 5;  % choose among 3 test functions (1, 2, 3)
 probLSFunc   = @probLineSearch_mod;
 suppressPlot = 1;
 
@@ -94,7 +94,7 @@ switch testfunction
         clear x_min;
         F           = @branin_testfun;
         x0          = [-10;8];
-        x_min{1}    = pattern_search(x0', F);      % minimizer 1
+        %x_min{1}    = pattern_search(x0', F);      % minimizer 1
         x1min = -10; x1max = 10;      % x-limits for plotting
         x2min = -10; x2max = 10;       % y-limits for plotting
         ff          = @branin_testfun_full;

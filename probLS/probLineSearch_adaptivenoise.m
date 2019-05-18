@@ -1,5 +1,5 @@
 function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
-        probLineSearch_mod(func, x0, f0, df0, search_direction, alpha0, verbosity, ...
+        probLineSearch_adaptivenoise(func, x0, f0, df0, search_direction, alpha0, verbosity, ...
         outs, paras, var_f0, var_df0)
 % probLineSearch.m -- A probabilistic line search algorithm for nonlinear
 % optimization problems with noisy gradients. 
@@ -347,6 +347,18 @@ function evaluate_function()
     Sigmadf      = [Sigmadf, var_df];
     N            = N + 1;
     
+    % -- TEST: Try taking max of observed sigmaf, sigmadf
+    sigmaf_test  = sqrt(var_f)/(alpha0*beta); 
+    sigmadf_test = sqrt((search_direction.^2)'*var_df)/beta;
+    if sigmaf_test > sigmaf
+        sigmaf = sigmaf_test;
+%        disp('Updating sigmaf');
+    end
+    if sigmadf_test > sigmadf
+        sigmadf = sigmadf_test;
+%        disp('Updating sigmadf');
+    end
+    
 end
 
 % -- helper functions -----------------------------------------------------
@@ -366,9 +378,6 @@ function updateGP() % using multiscope variables to construct GP
     
     % build noise matrix
     Sig = sigmaf^2 * ones(2*N, 1); Sig(N+1:end) = sigmadf^2;
-    if (N>2
-    disp(Sig)
-    error('poop');
     
     % build Gram matrix
     G = diag(Sig) + [kTT, kdTT; kdTT', dkdTT];
