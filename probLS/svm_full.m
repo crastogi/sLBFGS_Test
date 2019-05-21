@@ -1,7 +1,8 @@
-function [f, df, vf2, vdf2, var_f, var_df] = svm_full(x, varargin)
+function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = svm_full(x, varargin)
     global data;
     global classes;
     global batchsize;
+    global nDataPoints;
     lambda = .001;
     sampleidx = randsample(1:(size(data, 1)), batchsize);
    
@@ -24,11 +25,11 @@ function [f, df, vf2, vdf2, var_f, var_df] = svm_full(x, varargin)
     grad_matrix = data(sampleidx,:);
     % Row-wise multiply by scalar values (-1*y*(1-y))
     for i = 1:batchsize
-        grad_matrix(i,:) = -1*grad_matrix(i,:)*grad_scalar(i);
+        grad_matrix(i,:) = -1*grad_matrix(i,:)*grad_scalar(i) + lambda*x';
     end
     % Compute overall gradient, normalize by batch size and include the
     % regularizer; Note that output needs to be a column vector
-    df = sum(grad_matrix,1)/batchsize + lambda*x';
+    df = sum(grad_matrix,1)/batchsize;
     df = df';
     
     % Build vf and vdf
@@ -40,5 +41,7 @@ function [f, df, vf2, vdf2, var_f, var_df] = svm_full(x, varargin)
     vf2 = var_f;
     vdf2 = var_df;
 
+    nDataPoints = nDataPoints + batchsize;
+    
     return;
 end

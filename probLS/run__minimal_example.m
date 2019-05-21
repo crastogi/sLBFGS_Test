@@ -21,7 +21,7 @@
 %
 % (C) 2015, Maren Mahsereci (mmahsereci@tue.mpg.de)
 
-clearvars -except totEpochs;
+clearvars -except totEpochs nSamples nDataPoints totDist;
 
 % == CHANGE STUFF BELOW HERE ==============================================
 verbosity    = 0; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
@@ -29,7 +29,7 @@ ff           = @noisyFunction;
 maxEpochs    = 1000;
 stochIters   = 5;
 testfunction = 5;  % choose among 3 test functions (1, 2, 3)
-probLSFunc   = @probLineSearch_mod;
+probLSFunc   = @probLineSearch_improvedvariance;
 suppressPlot = 1;
 
 % sythetic noise standard deviations for function value and gradient
@@ -149,7 +149,7 @@ while nEpochs < maxEpochs
     % Perform stochastic iterations
     for t = 1:stochIters
         % Compute stochastic gradient estimate
-        [f_xt,grad_f_xt,~,~,var_f,var_df] = ff(xt);
+        [f_xt,grad_f_xt,~,~,var_f,var_df, g_m] = ff(xt); %,g_m
         [f_wk,grad_f_wk,~,~,~,~] = ff(wk);
         df = grad_f_xt - grad_f_wk + muk;
         outs.counter = outs.counter + 2;
@@ -158,7 +158,7 @@ while nEpochs < maxEpochs
         search_direction = -df;
         
         % Line search
-        [outs, alpha0, f, df, xt, var_f, var_df] = probLSFunc(ff, xt, f_xt, df, search_direction, alpha0, verbosity, outs, paras, var_f, var_df);
+        [outs, alpha0, f, df, xt, var_f, var_df] = probLSFunc(ff, xt, f_xt, df, search_direction, alpha0, verbosity, outs, paras, var_f, var_df, g_m);
         
         % -- storage only for plot --------------------------------------------
         path            = [path, xt];           %#ok<AGROW>

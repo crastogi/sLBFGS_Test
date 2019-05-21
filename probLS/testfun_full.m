@@ -1,6 +1,7 @@
-function [f, df, vf2, vdf2, var_f, var_df] = testfun_full(x, varargin)
+function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = testfun_full(x, varargin)
     global data;
     global batchsize;
+    global nDataPoints;
     sampleidx = randsample(1:(size(data, 1)), batchsize);
     f = sum((data(sampleidx,1)-x(1)).^2+(data(sampleidx,2)-x(2)).^2)/batchsize;
     df = [sum(data(sampleidx,1)-x(1)); sum(data(sampleidx,2)-x(2))]*-2/batchsize;
@@ -15,5 +16,8 @@ function [f, df, vf2, vdf2, var_f, var_df] = testfun_full(x, varargin)
 %    vdf2 = vdf*min(1, norm(df))^2; %/10000;
     vf2 = var_f;
     vdf2 = var_df;
+    grad_matrix = [data(sampleidx, 1)-x(1) data(sampleidx, 2)-x(2)]*-2;
+
+    nDataPoints = nDataPoints + batchsize;
 end
 

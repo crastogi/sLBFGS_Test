@@ -1,4 +1,4 @@
-function [f, df, vf2, vdf2, var_f, var_df] = testfun_full(x, varargin)
+function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = testfun_full(x, varargin)
     a = 1;
     b = 5.1/(4*pi*pi);     % Need to estimate these
     c = 5/pi;
@@ -16,6 +16,8 @@ function [f, df, vf2, vdf2, var_f, var_df] = testfun_full(x, varargin)
 
     df = [sum(2*a*(c-2*b*(data(sampleidx,1)+x(1))).*A-s*(1-t)*sin(data(sampleidx,1)+x(1))); sum(2*a*A)]/batchsize;
     
+    grad_matrix = [2*a*(c-2*b*(data(sampleidx,1)+x(1))).*A-s*(1-t)*sin(data(sampleidx,1)+x(1)) 2*a*A];
+    
     var_f = 1/(batchsize-1)*(1/batchsize*sum((a*A.^2 + s*(1-t)*cos(data(sampleidx,1)+x(1)) + 10).^2)-f^2);
     var_df_x = 1/batchsize*sum((2*a*(c-2*b*(data(sampleidx,1)+x(1))).*A-s*(1-t)*sin(data(sampleidx,1)+x(1))).^2)-df(1)^2;
     var_df_y = 1/batchsize*sum((2*a*A).^2)-df(2)^2;
@@ -27,5 +29,8 @@ function [f, df, vf2, vdf2, var_f, var_df] = testfun_full(x, varargin)
 %     vdf2 = vdf/10000;
     vf2 = 0; %var_f*min(1, norm(df))^3; %ceil(-log(norm(df))+1); %*(size(data,1)-batchsize)/size(data,1)*min(1, norm(df))^ceil(-log(norm(df))+1);
     vdf2 = var_df*0; %var_df*min(1, norm(df))^3; %ceil(-log(norm(df))+1); %(size(data,1)-batchsize)/size(data,1)*min(1, norm(df))^ceil(-log(norm(df))+1);
+    
+    global nDataPoints;
+    nDataPoints = nDataPoints+batchsize;
 end
 
