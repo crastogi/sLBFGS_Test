@@ -22,6 +22,8 @@
 % (C) 2015, Maren Mahsereci (mmahsereci@tue.mpg.de)
 
 clearvars -except totEpochs nSamples nDataPoints totDist;
+global path nEpochs x_min data batchsize stochIters;
+global vf vdf;
 
 % == CHANGE STUFF BELOW HERE ==============================================
 verbosity    = 0; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
@@ -29,17 +31,13 @@ ff           = @noisyFunction;
 maxEpochs    = 1000;
 stochIters   = 5;
 testfunction = 5;  % choose among 3 test functions (1, 2, 3)
-probLSFunc   = @probLineSearch_improvedvariance;
+probLSFunc   = @probLineSearch_exactvariance;
 suppressPlot = 1;
 
 % sythetic noise standard deviations for function value and gradient
 sigmaf  = .01;
 sigmadf = .01*ones(2, 1);
 % == CHANGE STUFF ABOVE HERE ==============================================
-global data;
-global batchsize;
-global vf;
-global vdf;
 
 switch testfunction
     case 1 % Booth2
@@ -93,7 +91,7 @@ switch testfunction
         batchsize   = 200;
         clear x_min;
         F           = @branin_testfun;
-        x0          = [-10;8];
+        x0          = (rand(2,1)-.5)*10; %[-10;8];
         %x_min{1}    = pattern_search(x0', F);      % minimizer 1
         x1min = -10; x1max = 10;      % x-limits for plotting
         x2min = -10; x2max = 10;       % y-limits for plotting
@@ -110,7 +108,7 @@ switch testfunction
         clear x_min;
         F           = @svm;
         x0          = rand(1, size(data,2))';
-        x_min{1}    = importdata("svm_min.csv");
+        x_min{1}    = importdata("svm_min.csv")';
         ff          = @svm_full;
         paras       = [];
 end % switch
