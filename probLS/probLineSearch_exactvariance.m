@@ -376,9 +376,6 @@ end
 
 % -- helper functions -----------------------------------------------------
 function updateGP() % using multiscope variables to construct GP
-
-    disp('In GP');
-    
     % build Gram matrix
     kTT   = zeros(N); 
     kdTT  = zeros(N); 

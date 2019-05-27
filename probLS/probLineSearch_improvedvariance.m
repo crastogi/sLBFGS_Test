@@ -155,8 +155,8 @@ beta = abs(search_direction'*df0); % scale f and df according to 1/(beta*alpha0)
 sigmaf  = sqrt(var_f0)/(alpha0*beta); 
 global batchsize;
 % Need to dot prod, sum, batchsize scale and transpose
-g0dot   = search_direction;
-for currIdx = 1:length(search_direction)
+g0dot   = zeros(1, size(grad_matrix, 1));
+for currIdx = 1:length(g0dot)
     g0dot(currIdx) = grad_matrix(currIdx,:)*search_direction;
 end
 new_g_var = 1/(batchsize-1)*(1/batchsize*sum(g0dot.^2)-(sum(g0dot)/batchsize)^2);
@@ -359,13 +359,11 @@ function evaluate_function()
     % -- TEST: Try taking max of observed sigmaf, sigmadf
     sigmaf_test  = sqrt(var_f)/(alpha0*beta);
     
-    
-    g0dot2   = search_direction;
-    for currIdx2 = 1:length(search_direction)
+    g0dot2   = zeros(1, size(grad_matrixT, 1));
+    for currIdx2 = 1:length(g0dot2)
         g0dot2(currIdx2) = grad_matrixT(currIdx2,:)*search_direction;
     end
     new_g_var2 = 1/(batchsize-1)*(1/batchsize*sum(g0dot2.^2)-(sum(g0dot2)/batchsize)^2);
-    
     sigmadf_test = sqrt(new_g_var2)/beta;
     if sigmaf_test > sigmaf
         sigmaf = sigmaf_test;

@@ -26,13 +26,13 @@ global path nEpochs x_min data batchsize stochIters;
 global vf vdf;
 
 % == CHANGE STUFF BELOW HERE ==============================================
-verbosity    = 0; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
+verbosity    = 1; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
 ff           = @noisyFunction;
 maxEpochs    = 1000;
 stochIters   = 5;
 testfunction = 5;  % choose among 3 test functions (1, 2, 3)
-probLSFunc   = @probLineSearch_exactvariance;
-suppressPlot = 1;
+probLSFunc   = @probLineSearch_mcsearch;
+suppressPlot = 0;
 
 % sythetic noise standard deviations for function value and gradient
 sigmaf  = .01;
@@ -88,10 +88,10 @@ switch testfunction
         disp("Branin test function");
         data        = importdata("braninsample.tsv");
         data        = data(1:10000,:);
-        batchsize   = 200;
+        batchsize   = 5000;
         clear x_min;
         F           = @branin_testfun;
-        x0          = (rand(2,1)-.5)*10; %[-10;8];
+        x0          = [-10;8];
         %x_min{1}    = pattern_search(x0', F);      % minimizer 1
         x1min = -10; x1max = 10;      % x-limits for plotting
         x2min = -10; x2max = 10;       % y-limits for plotting
@@ -107,8 +107,8 @@ switch testfunction
         batchsize   = 200;
         clear x_min;
         F           = @svm;
-        x0          = rand(1, size(data,2))';
         x_min{1}    = importdata("svm_min.csv")';
+        x0          = flip(x_min{1})*5;
         ff          = @svm_full;
         paras       = [];
 end % switch
@@ -156,6 +156,7 @@ while nEpochs < maxEpochs
         search_direction = -df;
         
         % Line search
+%        alpha0 = 1;   % fix
         [outs, alpha0, f, df, xt, var_f, var_df] = probLSFunc(ff, xt, f_xt, df, search_direction, alpha0, verbosity, outs, paras, var_f, var_df, g_m);
         
         % -- storage only for plot --------------------------------------------

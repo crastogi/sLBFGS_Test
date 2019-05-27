@@ -1,4 +1,4 @@
-function [f, df, ddf] = testfun(x, varargin)
+function [f, df, ddf] = branin_testfun(x, varargin)
     global data;
     nDataPoints = size(x, 1);
     f = zeros(nDataPoints,1);

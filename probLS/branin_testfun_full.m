@@ -1,4 +1,4 @@
-function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = testfun_full(x, varargin)
+function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = branin_testfun_full(x, varargin)
     a = 1;
     b = 5.1/(4*pi*pi);     % Need to estimate these
     c = 5/pi;
@@ -27,8 +27,8 @@ function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = testfun_full(x, vararg
     global vdf;
 %     vf2 = vf/10000;
 %     vdf2 = vdf/10000;
-    vf2 = 0; %var_f*min(1, norm(df))^3; %ceil(-log(norm(df))+1); %*(size(data,1)-batchsize)/size(data,1)*min(1, norm(df))^ceil(-log(norm(df))+1);
-    vdf2 = var_df*0; %var_df*min(1, norm(df))^3; %ceil(-log(norm(df))+1); %(size(data,1)-batchsize)/size(data,1)*min(1, norm(df))^ceil(-log(norm(df))+1);
+    vf2 = var_f; %var_f*min(1, norm(df))^3; %ceil(-log(norm(df))+1); %*(size(data,1)-batchsize)/size(data,1)*min(1, norm(df))^ceil(-log(norm(df))+1);
+    vdf2 = var_df; %var_df*min(1, norm(df))^3; %ceil(-log(norm(df))+1); %(size(data,1)-batchsize)/size(data,1)*min(1, norm(df))^ceil(-log(norm(df))+1);
     
     global nDataPoints;
     nDataPoints = nDataPoints+batchsize;

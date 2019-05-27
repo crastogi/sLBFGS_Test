@@ -1,7 +1,7 @@
 % Updates the noise estimate of the GP as noiser estimates are encountered
 function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
         probLineSearch_adaptivenoise(func, x0, f0, df0, search_direction, alpha0, verbosity, ...
-        outs, paras, var_f0, var_df0)
+        outs, paras, var_f0, var_df0, grad_matrix)
 % probLineSearch.m -- A probabilistic line search algorithm for nonlinear
 % optimization problems with noisy gradients. 
 %
