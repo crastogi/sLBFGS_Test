@@ -104,13 +104,13 @@ GaussCDF = @(z) 0.5 * (1 + erf(z/sqrt(2)));
 
 % LINE SEARCH PARAMETERS
 % constants for Wolfe conditions (must be chosen 0 < c1 < c2 < 1)
-c1 = 0.05;   
-c2 = 0.5; 
+c1 = 0.0001;   
+c2 = 0.99; 
 WolfeThreshold = 0.3; % Condition to trigger acceptance of wolfe criteria
 maxFuncEvals = 7; % maximum #function evaluations in one line search (+1)
 smallStepSize = 0.01; % size of non-dimensional step to take when failure occurs
 lastStep = false;
-improvedVariance = true;
+improvedVariance = false;
 stepAlphaMin = 1e-20;
 stepAlphaMax = 1e20;
 maxMCSearchIters = 10;
@@ -267,7 +267,7 @@ while true
         % Check to see if tt has already been tested (occurs when an
         % existing point satisfies the non-probabilistic wolfe conditions)
         if sum(ismember(T, tt))~=0
-            disp('tt has the same value as existing T value being tested!');
+            %disp('tt has the same value as existing T value being tested!');
             % Check to see if tt is the same as the rightmost point tested
             T_sorted = sort(T);
             T_idx = find(T_sorted==tt);
@@ -417,7 +417,7 @@ function [alphaT] = mcsearch(alphaT)
         end
         % If unusual termination is about to occur, let alphaT be the lowest point found so far
         if ( (isBracketed && (alphaT<=alphaMin || alphaT>=alphaMax)) || nLSEvals>=maxMCSearchIters-1) 
-            disp("UNUSUAL TERMINATION!");	
+            %disp("UNUSUAL TERMINATION!");	
             alphaT = max(T)*2;
             %gp_wolfe_diag();
             return;
@@ -430,7 +430,7 @@ end
 function evaluate_function()
 
     outs.counter = outs.counter + 1;
-    [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction, paras); % y: function value at tt
+    [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction); % y: function value at tt
     
     if isinf(y) || isnan(y)
         % this does not happen often, but still needs a fix
@@ -564,7 +564,9 @@ function make_outs(y, dy, var_f, var_df)
     dy_tt     = dy;                              % gradient at accepted position
     var_f_tt  = var_f;                           % variance of function value at accepted position
     var_df_tt = var_df;                          % variance of gradients at accepted position
-    
+        
+    % Return output step size
+    outs.step_size = tt*alpha0;
     
     % (todo) get rid of all these alpha resets
     % set new set size

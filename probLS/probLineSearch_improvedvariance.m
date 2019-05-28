@@ -333,7 +333,7 @@ makePlot();
 function evaluate_function()
 
     outs.counter = outs.counter + 1;
-    [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction, paras); % y: function value at tt
+    [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction); % y: function value at tt
     
     if isinf(y) || isnan(y)
         % this does not happen often, but still needs a fix

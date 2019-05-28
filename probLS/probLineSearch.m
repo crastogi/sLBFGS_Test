@@ -324,7 +324,7 @@ makePlot();
 function evaluate_function()
 
     outs.counter = outs.counter + 1;
-    [y, dy, var_f, var_df] = func(x0 + tt*alpha0*search_direction, paras); % y: function value at tt
+    [y, dy, var_f, var_df] = func(x0 + tt*alpha0*search_direction); % y: function value at tt
     
     if isinf(y) || isnan(y)
         % this does not happen often, but still needs a fix
@@ -658,6 +658,9 @@ function make_outs(y, dy, var_f, var_df)
     dy_tt     = dy;                              % gradient at accepted position
     var_f_tt  = var_f;                           % variance of function value at accepted position
     var_df_tt = var_df;                          % variance of gradients at accepted position
+    
+    % Return output step size
+    outs.step_size = tt*alpha0;
     
     % set new set size
     % next initial step size is 1.3 times larger than last accepted step size

@@ -1,10 +1,12 @@
-function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = svm_full(x, varargin)
+function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = svm_full(x, sampleidx, varargin)
     global data;
     global classes;
     global batchsize;
     global nDataPoints;
     lambda = .001;
-    sampleidx = randsample(1:(size(data, 1)), batchsize);
+    if ~exist('sampleidx','var')
+        sampleidx = randsample(1:(size(data, 1)), batchsize);
+    end
    
     % x is col vector
     % -- function value ---------------------------------------------------

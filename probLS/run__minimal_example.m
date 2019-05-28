@@ -26,13 +26,13 @@ global path nEpochs x_min data batchsize stochIters;
 global vf vdf;
 
 % == CHANGE STUFF BELOW HERE ==============================================
-verbosity    = 1; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
+verbosity    = 0; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
 ff           = @noisyFunction;
 maxEpochs    = 1000;
 stochIters   = 5;
-testfunction = 5;  % choose among 3 test functions (1, 2, 3)
-probLSFunc   = @probLineSearch_mcsearch;
-suppressPlot = 0;
+testfunction = 6;  % choose among 3 test functions (1, 2, 3)
+probLSFunc   = @probLineSearch;
+suppressPlot = 1;
 
 % sythetic noise standard deviations for function value and gradient
 sigmaf  = .01;
@@ -88,11 +88,11 @@ switch testfunction
         disp("Branin test function");
         data        = importdata("braninsample.tsv");
         data        = data(1:10000,:);
-        batchsize   = 5000;
+        batchsize   = 20;
         clear x_min;
         F           = @branin_testfun;
         x0          = [-10;8];
-        %x_min{1}    = pattern_search(x0', F);      % minimizer 1
+        x_min{1}    = [3.987363338470459; -1.360818743705750];
         x1min = -10; x1max = 10;      % x-limits for plotting
         x2min = -10; x2max = 10;       % y-limits for plotting
         ff          = @branin_testfun_full;
@@ -128,7 +128,7 @@ function_values     = ff(x0);
 while nEpochs < maxEpochs
     % Compute full gradient for variance reduction
     temp_batchsize = batchsize;
-    batchsize = length(data);
+    batchsize = size(data, 1);
     % Set local function and gradient variance
     wk = xt;
     [fFull, muk, vf, vdf, ~, ~] = ff(wk);
@@ -146,9 +146,10 @@ while nEpochs < maxEpochs
     
     % Perform stochastic iterations
     for t = 1:stochIters
-        % Compute stochastic gradient estimate
-        [f_xt,grad_f_xt,~,~,var_f,var_df, g_m] = ff(xt); %,g_m
-        [f_wk,grad_f_wk,~,~,~,~] = ff(wk);
+        % Compute stochastic gradient estimate; set batch
+        sidx = randsample(1:(size(data,1)), batchsize);
+        [f_xt,grad_f_xt,~,~,var_f,var_df, g_m] = ff(xt, sidx);
+        [f_wk,grad_f_wk,~,~,~,~] = ff(wk, sidx);
         df = grad_f_xt - grad_f_wk + muk;
         outs.counter = outs.counter + 2;
         
@@ -205,6 +206,6 @@ if suppressPlot==0
         yyaxis left;
         plot(log10(sqrt(dists)));
         yyaxis right;
-        plot(grad_norm);
+        plot(log10(grad_norm));
     end
 end

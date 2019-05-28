@@ -1,4 +1,4 @@
-function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = branin_testfun_full(x, varargin)
+function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = branin_testfun_full(x, sampleidx, varargin)
     a = 1;
     b = 5.1/(4*pi*pi);     % Need to estimate these
     c = 5/pi;
@@ -8,7 +8,9 @@ function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = branin_testfun_full(x,
     
     global data;
     global batchsize;
-    sampleidx = randsample(1:(size(data, 1)), batchsize);
+    if ~exist('sampleidx','var')
+        sampleidx = randsample(1:(size(data, 1)), batchsize);
+    end
     
     % -- function value ---------------------------------------------------
     A = (data(sampleidx,2)+x(2)) - b*(data(sampleidx,1)+x(1)).^2 + c*(data(sampleidx,1)+x(1)) - r;
