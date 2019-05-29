@@ -2,7 +2,7 @@
 % the adaptive noise concept
 function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
         probLineSearch_mcsearch(func, x0, f0, df0, search_direction, ...
-        alpha0, verbosity, outs, paras, var_f0, var_df0, grad_matrix)
+        alpha0, verbosity, outs, paras, var_f0, var_df0, grad_matrix, mu_k, w_k)
 % probLineSearch.m -- A probabilistic line search algorithm for nonlinear
 % optimization problems with noisy gradients. 
 %
@@ -66,18 +66,18 @@ function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
 % SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 % Declare global variables
-global batchsize;
+global batchsize data;
 % These global variabels are for mcstep/mcsearch
 global isBracketed alphaMin alphaMax alphaU fU gU alphaL fL gL;
 % -- setup fixed parameters -----------------------------------------------
 if ~isfield(outs, 'counter')
     outs.counter = 1;
 end
-if isempty(verbosity)
-    verbosity = 0;
-end
 if ~isfield(outs, 'alpha_stats')
     outs.alpha_stats = alpha0; % running average over accepted step sizes
+end
+if isempty(verbosity)
+    verbosity = 0;
 end
 % -- set up GP ------------------------------------------------------------
 % create variables with shared scope. Ugly, but necessary because
@@ -115,6 +115,12 @@ stepAlphaMin = 1e-20;
 stepAlphaMax = 1e20;
 maxMCSearchIters = 10;
 uTol = 1e-10;
+if ~isempty(mu_k) && ~isempty(w_k)
+    % Use SVRG for gradient moves
+    useSVRG = true;
+else
+    useSVRG = false;
+end
 
 % BEGIN LINE SEARCH
 tt  = 1; % initial step size in scaled space
@@ -190,7 +196,8 @@ while true
             %gp_wolfe_diag();
         end
         % Evaluate function at small step size
-        tt = smallStepSize;
+        %tt = smallStepSize;
+        tt = -1;
         evaluate_function();
         make_outs(y, dy, var_f, var_df);
         return;
@@ -251,12 +258,6 @@ while true
     if N >= maxFuncEvals+1
         break;
     end
-
-%     % Check projective step
-%     if N == 2
-%         tt = .5;
-%         continue;
-%     end
     
     % None of the currently evaluated points are acceptable. Compute new
     % test point using mcsearch.
@@ -313,19 +314,20 @@ make_outs(y, dy, var_f, var_df);
 
 % *************************************************************************
 function gp_wolfe_diag()
-	nSteps = max(T)*100;
+	nSteps = range(T)*100;
+    x_axis = linspace(min(T), max(T), range(T)*100);
     f_outs = zeros(1,nSteps);
     w1_vals= f_outs;
     g_outs = f_outs;
     for curr_idx = 1:nSteps 
-        f_outs(curr_idx) = m(curr_idx/100);
-        w1_vals(curr_idx) = m(0)+curr_idx/100*c1*d1m(0);
-        g_outs(curr_idx) = d1m(curr_idx/100);
+        f_outs(curr_idx) = m(x_axis(curr_idx));
+        w1_vals(curr_idx) = m(0)+x_axis(curr_idx)*c1*d1m(0);
+        g_outs(curr_idx) = d1m(x_axis(curr_idx));
     end
     figure;
-    yyaxis left; plot(f_outs); hold on; plot(w1_vals); 
-    yyaxis right; plot(g_outs); 
-    hold on; line([0 nSteps], [c2*d1m(0) c2*d1m(0)]); line([0 nSteps], [-c2*d1m(0) -c2*d1m(0)]);
+    yyaxis left; plot(x_axis, f_outs); hold on; plot(x_axis, w1_vals); ylabel('GP Function Value');
+    yyaxis right; plot(x_axis, g_outs); ylabel('GP Gradient Value');
+    hold on; line([min(x_axis) max(x_axis)], [c2*d1m(0) c2*d1m(0)]); line([min(x_axis) max(x_axis)], [-c2*d1m(0) -c2*d1m(0)]);
 end
 
 % *************************************************************************
@@ -417,7 +419,9 @@ function [alphaT] = mcsearch(alphaT)
         end
         % If unusual termination is about to occur, let alphaT be the lowest point found so far
         if ( (isBracketed && (alphaT<=alphaMin || alphaT>=alphaMax)) || nLSEvals>=maxMCSearchIters-1) 
-            %disp("UNUSUAL TERMINATION!");	
+            if verbosity > 1
+                disp("UNUSUAL TERMINATION!");
+            end
             alphaT = max(T)*2;
             %gp_wolfe_diag();
             return;
@@ -430,7 +434,15 @@ end
 function evaluate_function()
 
     outs.counter = outs.counter + 1;
-    [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction); % y: function value at tt
+    if useSVRG
+        sidx = randsample(1:(size(data,1)), batchsize);
+        [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction, sidx);
+        [~,grad_f_wk,~,~,~,~] = func(w_k', sidx);
+        dy = (dy + mu_k') - grad_f_wk;
+    else
+        % y: function value at tt
+        [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction);
+    end
     
     if isinf(y) || isnan(y)
         % this does not happen often, but still needs a fix

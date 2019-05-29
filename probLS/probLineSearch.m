@@ -1,6 +1,6 @@
 function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
         probLineSearch(func, x0, f0, df0, search_direction, alpha0, verbosity, ...
-        outs, paras, var_f0, var_df0, grad_matrix)
+        outs, paras, var_f0, var_df0, grad_matrix, mu_k, w_k)
 % probLineSearch.m -- A probabilistic line search algorithm for nonlinear
 % optimization problems with noisy gradients. 
 %
@@ -121,6 +121,14 @@ offset  = 10; % off-set, for numerical stability.
 
 EXT = 1; % extrapolation factor
 tt  = 1; % initial step size in scaled space
+
+global batchsize data;
+if ~isempty(mu_k) && ~isempty(w_k)
+    % Use SVRG for gradient moves
+    useSVRG = true;
+else
+    useSVRG = false;
+end
 
 % -- set up GP ------------------------------------------------------------
 % create variables with shared scope. Ugly, but necessary because
@@ -324,7 +332,15 @@ makePlot();
 function evaluate_function()
 
     outs.counter = outs.counter + 1;
-    [y, dy, var_f, var_df] = func(x0 + tt*alpha0*search_direction); % y: function value at tt
+    if useSVRG
+        sidx = randsample(1:(size(data,1)), batchsize);
+        [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction, sidx);
+        [~,grad_f_wk,~,~,~,~] = func(w_k', sidx);
+        dy = (dy + mu_k') - grad_f_wk;
+    else
+        % y: function value at tt
+        [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction);
+    end
     
     if isinf(y) || isnan(y)
         % this does not happen often, but still needs a fix

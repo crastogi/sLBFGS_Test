@@ -1,4 +1,21 @@
-function [fit] = sLBFGS(ff, x0, epochIterations, hessianPeriod, maxEpoch, stepsize, memorySize, verbosity, ls_function)
+% Make single probLineSearch with regular, adaptive and improved variance options
+% Make mcsearch have option for adaptive, improved, and regular variance
+% Make sure sLBFGS outs make sense with actual outs of probLineSearch
+% Create option in run__minimal_example to test slbfgs
+% Improve plotting options in run__minimal_example to new detailed plot
+% Create options for setting c1, c2
+
+% Understand average distance travelled, alpha, etc. with line search and
+% without line search. See where the 'distance' is being accumulated
+% Play with c1/c2 
+% Try adjusting both function and variance value in SVRG for PLS
+
+function [path, function_values, grad_norm] = sLBFGS(ff, x0, epochIterations, hessianPeriod, maxEpoch, stepsize, memorySize, verbosity, ls_function, lsSVRG)
+    if (isempty(ls_function))
+        useLineSearch = 0;
+    else 
+        useLineSearch = 1;
+    end
     global batchsize data;
     b = batchsize;
     d = size(data, 2);
@@ -26,6 +43,11 @@ function [fit] = sLBFGS(ff, x0, epochIterations, hessianPeriod, maxEpoch, stepsi
     % Initialize with a seed
     w_k = x0';
     w_k_prev = w_k;
+    
+    % Store path, etc.
+    path = [];
+    function_values = [];
+    grad_norm = [];
 
     % Loop over epochs 
     for k = 0:maxEpoch
@@ -33,6 +55,10 @@ function [fit] = sLBFGS(ff, x0, epochIterations, hessianPeriod, maxEpoch, stepsi
         batchsize = N;
         [fFull, mu_k, ~, ~, ~, ~] = ff(w_k');
         mu_k = mu_k';
+        
+        path = [path, w_k'];
+        function_values = [function_values, fFull];
+        grad_norm = [grad_norm, norm(mu_k)]; 
         
         % Print some information about the current epoch
         if (verbosity)
@@ -46,7 +72,6 @@ function [fit] = sLBFGS(ff, x0, epochIterations, hessianPeriod, maxEpoch, stepsi
         % Check for convergence, final epoch
         if (norm(mu_k)/max([1 norm(w_k)]) < epsilon)
             disp("Convergence!");
-            fit = w_k;
             batchsize = b;
             return;
         end
@@ -66,6 +91,8 @@ function [fit] = sLBFGS(ff, x0, epochIterations, hessianPeriod, maxEpoch, stepsi
             [f_xt,grad_f_xt,~,~,var_f,var_df, g_m] = ff(x_t', sidx);
             [f_wk,grad_f_wk,~,~,~,~] = ff(w_k', sidx);
             v_t = (grad_f_xt' + mu_k) - grad_f_wk';
+            
+            %disp(['New function value: ' num2str(f_xt) '; New gradient norm: ' num2str(norm(grad_f_xt))]);
 
             if (norm(v_t)<1E-10) 
                 % Potential convergence (and scale issue, break and go to
@@ -83,23 +110,39 @@ function [fit] = sLBFGS(ff, x0, epochIterations, hessianPeriod, maxEpoch, stepsi
             else
                 % Compute the two-loop recursion product
                 effGrad = twoLoopRecursion(v_t);
-            end			
-            % Bound the effective gradient update step
-%             egNorm = norm(effGrad);
-%             divisor = 1;
-%             while (egNorm/divisor > gradientNormBound)
-%                 divisor = divisor*10;
-%             end
+            end
             
-            % Compute eta; different methods until one hessian correction
-            % takes place
-            if (r < 1)
-                ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, -effGrad', 1/norm(grad_f_xt), 0, [], [], var_f,var_df, g_m);
-            else 
-                ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, -effGrad', eta, 0, [], [], var_f,var_df, g_m);
-            end 
-            x_t = x_t - ls_out.step_size*effGrad;
-
+            %Bound the effective gradient update step
+            egNorm = norm(effGrad);
+            divisor = 1;
+            while (egNorm/divisor > gradientNormBound)
+                %disp('Inflated divisor!');
+                divisor = divisor*10;
+            end
+            
+            % Should a linesearch be used?
+            if useLineSearch
+                % Compute eta; different methods until one hessian 
+                % correction takes place
+                batchsize = b;
+                if lsSVRG
+                    if (r < 1)
+                        ls_out = ls_function(ff, x_t', f_xt, v_t', -effGrad', 1/(norm(v_t)*divisor), 0, [], [], var_f,var_df, g_m, mu_k, w_k);
+                    else 
+                        ls_out = ls_function(ff, x_t', f_xt, v_t', -effGrad', eta/divisor, 0, [], [], var_f,var_df, g_m, mu_k, w_k);
+                    end 
+                else
+                    if (r < 1)
+                        ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, -effGrad', 1/(norm(grad_f_xt)*divisor), 0, [], [], var_f,var_df, g_m, [], []);
+                    else 
+                        ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, -effGrad', eta/divisor, 0, [], [], var_f,var_df, g_m, [], []);
+                    end 
+                end
+                x_t = x_t - ls_out.step_size*effGrad;
+            else
+                x_t = x_t - eta*effGrad/divisor;
+            end
+            
             % Check to see if L iterations have passed (triggers hessian update)
             if (mod(t,L) == 0)
                 % Increment the number of hessian correction pairs
@@ -128,7 +171,8 @@ function [fit] = sLBFGS(ff, x0, epochIterations, hessianPeriod, maxEpoch, stepsi
         w_k = x_t;
     end
     batchsize = b;
-    error('sLBFGS Failure: maximum epochs exceeded without convergence!');
+    disp('sLBFGS Failure: maximum epochs exceeded without convergence!');
+    return;
 
     function [r_2] = twoLoopRecursion(v_t)
         alphas = zeros(1, currDepth);
