@@ -2,7 +2,8 @@
 % the adaptive noise concept
 function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
         probLineSearch_mcsearch(func, x0, f0, df0, search_direction, ...
-        alpha0, verbosity, outs, paras, var_f0, var_df0, grad_matrix, mu_k, w_k)
+        alpha0, verbosity, outs, paras, var_f0, var_df0, variance_option,...
+        grad_matrix, mu_k, w_k)
 % probLineSearch.m -- A probabilistic line search algorithm for nonlinear
 % optimization problems with noisy gradients. 
 %
@@ -66,8 +67,8 @@ function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
 % SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 % Declare global variables
-global batchsize data;
-% These global variabels are for mcstep/mcsearch
+global batchsize data c1 c2;
+% These global variables are for mcstep/mcsearch
 global isBracketed alphaMin alphaMax alphaU fU gU alphaL fL gL;
 % -- setup fixed parameters -----------------------------------------------
 if ~isfield(outs, 'counter')
@@ -104,17 +105,19 @@ GaussCDF = @(z) 0.5 * (1 + erf(z/sqrt(2)));
 
 % LINE SEARCH PARAMETERS
 % constants for Wolfe conditions (must be chosen 0 < c1 < c2 < 1)
-c1 = 0.0001;   
-c2 = 0.99; 
+%c1 = 0.0001;   
+%c2 = 0.99; 
 WolfeThreshold = 0.3; % Condition to trigger acceptance of wolfe criteria
 maxFuncEvals = 7; % maximum #function evaluations in one line search (+1)
 smallStepSize = 0.01; % size of non-dimensional step to take when failure occurs
 lastStep = false;
-improvedVariance = false;
 stepAlphaMin = 1e-20;
 stepAlphaMax = 1e20;
 maxMCSearchIters = 10;
 uTol = 1e-10;
+if isempty(variance_option)
+    variance_option = 0;
+end
 if ~isempty(mu_k) && ~isempty(w_k)
     % Use SVRG for gradient moves
     useSVRG = true;
@@ -128,7 +131,7 @@ tt  = 1; % initial step size in scaled space
 beta = abs(search_direction'*df0); % scale f and df according to 1/(beta*alpha0)
 % Compute noise for starting point (T=0)?
 sigmaf  = sqrt(var_f0)/(alpha0*beta); 
-if improvedVariance
+if variance_option > 1
     % Compute improved variance
     g0dot   = zeros(1, size(grad_matrix, 1));
     for currIdx = 1:length(g0dot)
@@ -196,8 +199,7 @@ while true
             %gp_wolfe_diag();
         end
         % Evaluate function at small step size
-        %tt = smallStepSize;
-        tt = -1;
+        tt = smallStepSize;
         evaluate_function();
         make_outs(y, dy, var_f, var_df);
         return;
@@ -437,8 +439,8 @@ function evaluate_function()
     if useSVRG
         sidx = randsample(1:(size(data,1)), batchsize);
         [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction, sidx);
-        [~,grad_f_wk,~,~,~,~] = func(w_k', sidx);
-        dy = (dy + mu_k') - grad_f_wk;
+        [~,grad_f_wk,~,~,~,~] = func(w_k, sidx);
+        dy = (dy + mu_k) - grad_f_wk;
     else
         % y: function value at tt
         [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction);
@@ -465,9 +467,8 @@ function evaluate_function()
     Sigmadf      = [Sigmadf, var_df];
     N            = N + 1;
     
-    % Take max of observed sigmaf, sigmadf
-    sigmaf_test  = sqrt(var_f)/(alpha0*beta);
-    if improvedVariance
+    if variance_option > 1
+        % Compute improved variance
         g0dot2   = zeros(1, size(grad_matrixT, 1));
         for currIdx2 = 1:length(g0dot2)
             g0dot2(currIdx2) = grad_matrixT(currIdx2,:)*search_direction;
@@ -477,11 +478,15 @@ function evaluate_function()
         sigmadf_test = sqrt((search_direction.^2)'*var_df)/beta;
     end
     
-    if sigmaf_test > sigmaf
-        sigmaf = sigmaf_test;
-    end
-    if sigmadf_test > sigmadf
-        sigmadf = sigmadf_test;
+    if variance_option > 0
+        % Update variance; Take max of observed sigmaf, sigmadf
+        sigmaf_test  = sqrt(var_f)/(alpha0*beta);
+        if sigmaf_test > sigmaf
+            sigmaf = sigmaf_test;
+        end
+        if sigmadf_test > sigmadf
+            sigmadf = sigmadf_test;
+        end
     end
 end
 

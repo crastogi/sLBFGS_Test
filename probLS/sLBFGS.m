@@ -1,16 +1,11 @@
-% Make single probLineSearch with regular, adaptive and improved variance options
-% Make mcsearch have option for adaptive, improved, and regular variance
-% Make sure sLBFGS outs make sense with actual outs of probLineSearch
-% Create option in run__minimal_example to test slbfgs
-% Improve plotting options in run__minimal_example to new detailed plot
-% Create options for setting c1, c2
-
 % Understand average distance travelled, alpha, etc. with line search and
 % without line search. See where the 'distance' is being accumulated
 % Play with c1/c2 
 % Try adjusting both function and variance value in SVRG for PLS
 
-function [path, function_values, grad_norm] = sLBFGS(ff, x0, epochIterations, hessianPeriod, maxEpoch, stepsize, memorySize, verbosity, ls_function, lsSVRG)
+function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
+    epochIterations, hessianPeriod, maxEpoch, stepsize, memorySize, ...
+    verbosity, ls_function, useSVRG, variance_option)
     if (isempty(ls_function))
         useLineSearch = 0;
     else 
@@ -125,17 +120,25 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, epochIterations, he
                 % Compute eta; different methods until one hessian 
                 % correction takes place
                 batchsize = b;
-                if lsSVRG
+                if useSVRG
                     if (r < 1)
-                        ls_out = ls_function(ff, x_t', f_xt, v_t', -effGrad', 1/(norm(v_t)*divisor), 0, [], [], var_f,var_df, g_m, mu_k, w_k);
+                        ls_out = ls_function(ff, x_t', f_xt, v_t', ...
+                            -effGrad', 1/(norm(v_t)*divisor), 0, [], [], ...
+                            var_f,var_df, variance_option, g_m, mu_k', w_k');
                     else 
-                        ls_out = ls_function(ff, x_t', f_xt, v_t', -effGrad', eta/divisor, 0, [], [], var_f,var_df, g_m, mu_k, w_k);
+                        ls_out = ls_function(ff, x_t', f_xt, v_t', ...
+                            -effGrad', eta/divisor, 0, [], [], var_f, ...
+                            var_df, g_m, variance_option, mu_k', w_k');
                     end 
                 else
                     if (r < 1)
-                        ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, -effGrad', 1/(norm(grad_f_xt)*divisor), 0, [], [], var_f,var_df, g_m, [], []);
+                        ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, ...
+                            -effGrad', 1/(norm(grad_f_xt)*divisor), 0, ...
+                            [], [], var_f,var_df, variance_option, g_m, [], []);
                     else 
-                        ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, -effGrad', eta/divisor, 0, [], [], var_f,var_df, g_m, [], []);
+                        ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, ...
+                            -effGrad', eta/divisor, 0, [], [], var_f, ...
+                            var_df, variance_option, g_m, [], []);
                     end 
                 end
                 x_t = x_t - ls_out.step_size*effGrad;
@@ -181,12 +184,12 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, epochIterations, he
         q = v_t;
 
         % The first loop (starts from the latest entry and goes to the earliest)
-        for i = 1:currDepth
+        for curr_idx = 1:currDepth
             % Compute and store alpha_i = rho_u*s_i*q
-            alpha = rho(i)*dot(s(i,:), q);
-            alphas(i) = alpha;
+            alpha = rho(curr_idx)*dot(s(curr_idx,:), q);
+            alphas(curr_idx) = alpha;
             % Update q: q = q - alpha_i*y_i
-            q = q - alpha*y(i,:);
+            q = q - alpha*y(curr_idx,:);
         end
         % Start computing R; Begin by computing gamma_k = s_k*y_k/(y_k*y_k)
         gamma = dot(s(currDepth,:), y(currDepth,:))/dot(y(currDepth,:), y(currDepth,:));
@@ -196,11 +199,11 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, epochIterations, he
         r_2 = q*gamma/(1.0 + delta*gamma);
 
         % Second loop (goes in reverse, starting from the earliest entry)
-        for i = flip(1:currDepth)
+        for curr_idx = flip(1:currDepth)
             % beta = rho_i*y_i*r
-            beta = rho(i)*dot(y(i,:), r_2);
+            beta = rho(curr_idx)*dot(y(curr_idx,:), r_2);
             % r = r + s_i*(alpha_i-beta)
-            r_2 = r_2 + s(i,:)*(alphas(i)-beta);
+            r_2 = r_2 + s(curr_idx,:)*(alphas(curr_idx)-beta);
         end
     end
 

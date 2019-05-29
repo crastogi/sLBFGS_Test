@@ -22,17 +22,25 @@
 % (C) 2015, Maren Mahsereci (mmahsereci@tue.mpg.de)
 
 clearvars -except totEpochs nSamples nDataPoints totDist;
-global path nEpochs x_min data batchsize stochIters;
+global path nEpochs x_min data batchsize stochIters c1 c2;
 global vf vdf;
 
 % == CHANGE STUFF BELOW HERE ==============================================
-verbosity    = 0; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
+verbosity    = 1; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
 ff           = @noisyFunction;
-maxEpochs    = 1000;
-stochIters   = 5;
 testfunction = 6;  % choose among 3 test functions (1, 2, 3)
-probLSFunc   = @probLineSearch;
-suppressPlot = 1;
+suppressPlot = 0;
+
+% PLS + optimizer options
+useSLBFGS    = true;
+maxEpochs    = 1000;
+batchsize    = 200;
+stochIters   = 50;
+probLSFunc   = @probLineSearch_mcsearch;   % can be null ([])
+useSVRG      = true;
+c1           = .05;
+c2           = .50;
+variance_option=1;   % 0: standard, 1: adaptive, 2: improved
 
 % sythetic noise standard deviations for function value and gradient
 sigmaf  = .01;
@@ -72,9 +80,8 @@ switch testfunction
     
     case 4 % New Test function
         disp("Gaussian test function");
-        data        = importdata("bivariate_normal.tsv");
+        data        = importdata("Data/bivariate_normal.tsv");
         data        = data(1:1000,:);
-        batchsize   = 10;
         clear x_min;
         F           = @testfun;
         x_min{1}    = mean(data)';          % Only minimizer
@@ -86,9 +93,8 @@ switch testfunction
         
     case 5 % New Branin Test function
         disp("Branin test function");
-        data        = importdata("braninsample.tsv");
+        data        = importdata("Data/braninsample.tsv");
         data        = data(1:10000,:);
-        batchsize   = 20;
         clear x_min;
         F           = @branin_testfun;
         x0          = [-10;8];
@@ -104,76 +110,115 @@ switch testfunction
         data        = data.data;
         classes     = data(:,end);
         data        = data(:,1:(end-1));
-        batchsize   = 200;
         clear x_min;
         F           = @svm;
-        x_min{1}    = importdata("svm_min.csv")';
+        x_min{1}    = importdata("Data/svm_min.csv")';
         x0          = flip(x_min{1})*5;
         ff          = @svm_full;
         paras       = [];
 end % switch
 
-nEpochs = 0;
-xt = x0;
-outs.counter        = 0;
-full_dataset_iters   = 0;
-alpha0 = 1;
+if useSLBFGS
+    stepSize = .1;
+    hessianPeriod = 10;
+    memorySize = 10;
+    [path, function_values, grad_norm] = sLBFGS(ff, x0, stochIters, ...
+        hessianPeriod, maxEpochs, stepSize, memorySize, verbosity, ...
+        probLSFunc, useSVRG, variance_option);
+    nEpochs = size(path,2);
+else
+    nEpochs = 0;
+    xt = x0;
+    outs.counter        = 0;
+    full_dataset_iters   = 0;
+    alpha0 = 1;
 
-% Storage only for plot
-path                = x0;
-grad_norm           = double.empty;
-function_values     = ff(x0);
+    % Storage only for plot
+    path                = x0;
+    grad_norm           = double.empty;
+    function_values     = ff(x0);
 
-% Loop over epochs
-while nEpochs < maxEpochs
-    % Compute full gradient for variance reduction
-    temp_batchsize = batchsize;
-    batchsize = size(data, 1);
-    % Set local function and gradient variance
-    wk = xt;
-    [fFull, muk, vf, vdf, ~, ~] = ff(wk);
-    % (Potentially) rescale full batch noise
-    %vf = vf*min(1, norm(muk))^2*0;
-    %vdf = vdf*min(1, norm(muk))^2*0;
-    full_dataset_iters = full_dataset_iters + 1;
-    batchsize = temp_batchsize;
-    
-    % Check for convergence: Exit on estimation on full dataset
-    if (norm(muk)/max(1,norm(wk)) < 1E-3)
-        disp("Converged!");
-        break
+    % Loop over epochs
+    while nEpochs < maxEpochs
+        % Compute full gradient for variance reduction
+        temp_batchsize = batchsize;
+        batchsize = size(data, 1);
+        % Set local function and gradient variance
+        wk = xt;
+        [fFull, muk, vf, vdf, ~, ~] = ff(wk);
+        % (Potentially) rescale full batch noise
+        %vf = vf*min(1, norm(muk))^2*0;
+        %vdf = vdf*min(1, norm(muk))^2*0;
+        full_dataset_iters = full_dataset_iters + 1;
+        batchsize = temp_batchsize;
+
+        % Check for convergence: Exit on estimation on full dataset
+        if (norm(muk)/max(1,norm(wk)) < 1E-3)
+            disp("Converged!");
+            break
+        end
+
+        % Perform stochastic iterations
+        for t = 1:stochIters
+            % Compute stochastic gradient estimate; set batch
+            sidx = randsample(1:(size(data,1)), batchsize);
+            [f_xt,grad_f_xt,~,~,var_f,var_df, g_m] = ff(xt, sidx);
+            [f_wk,grad_f_wk,~,~,~,~] = ff(wk, sidx);
+            df = grad_f_xt - grad_f_wk + muk;
+            outs.counter = outs.counter + 2;
+
+            % Update search direction
+            search_direction = -df;
+
+            % Line search with SVRG option
+
+            if useSVRG
+                [outs, alpha0, f, df, xt, var_f, var_df] = probLSFunc(ff, xt, ...
+                f_xt, df, search_direction, alpha0, verbosity, outs, paras, ...
+                var_f, var_df, variance_option, g_m, muk, wk);
+            else
+                [outs, alpha0, f, df, xt, var_f, var_df] = probLSFunc(ff, xt, ...
+                f_xt, df, search_direction, alpha0, verbosity, outs, paras, ...
+                var_f, var_df, variance_option, g_m, [], []);
+            end
+
+            % -- storage only for plot --------------------------------------------
+            path            = [path, xt];           %#ok<AGROW>
+            grad_norm       = [grad_norm, norm(muk)];
+            function_values = [function_values, f]; %#ok<AGROW>
+        end
+        nEpochs = nEpochs + 1;
     end
-    
-    % Perform stochastic iterations
-    for t = 1:stochIters
-        % Compute stochastic gradient estimate; set batch
-        sidx = randsample(1:(size(data,1)), batchsize);
-        [f_xt,grad_f_xt,~,~,var_f,var_df, g_m] = ff(xt, sidx);
-        [f_wk,grad_f_wk,~,~,~,~] = ff(wk, sidx);
-        df = grad_f_xt - grad_f_wk + muk;
-        outs.counter = outs.counter + 2;
-        
-        % Update search direction
-        search_direction = -df;
-        
-        % Line search
-%        alpha0 = 1;   % fix
-        [outs, alpha0, f, df, xt, var_f, var_df] = probLSFunc(ff, xt, f_xt, df, search_direction, alpha0, verbosity, outs, paras, var_f, var_df, g_m);
-        
-        % -- storage only for plot --------------------------------------------
-        path            = [path, xt];           %#ok<AGROW>
-        grad_norm       = [grad_norm, norm(muk)];
-        function_values = [function_values, f]; %#ok<AGROW>
-    end
-    nEpochs = nEpochs + 1;
 end
-
 
 %% -- plot -----------------------------------------------------------------
 
-if suppressPlot==0 
-    clf;
-    if (testfunction<6) 
+if suppressPlot==0
+    figure;
+    % Convergence information
+    dist2opt = path;
+    dist2pt = path*0;
+    for i = 1:length(x_min{1})
+        dist2opt(i,:) = dist2opt(i,:)-x_min{1}(i);
+    end
+    for i = 2:size(path, 2)
+        dist2pt(:,i) = path(:,i)-path(:,(i-1));
+    end
+    dists = sum(dist2opt.^2, 1);
+    ptdists = sum(dist2pt.^2, 1);
+    yyaxis left;
+    plot(log10(sqrt(dists)), 'DisplayName','Distance To Opt');
+    hold on;
+    plot(log10(sqrt(ptdists)), 'DisplayName','Epoch Pt Dist');
+    ylabel('log10( Value )');
+    yyaxis right;
+    plot(log10(grad_norm),'DisplayName','Grad Norm');
+    hold on;
+    plot(log10(function_values), 'DisplayName','Function Value');
+    ylabel('log10( Value )');
+    legend
+    if (testfunction<6)
+        figure;
         ax = linspace(x1min, x1max, 200);
         ay = linspace(x2min, x2max, 200);
         [X, Y] = meshgrid(ax, ay); % a x b
@@ -192,20 +237,5 @@ if suppressPlot==0
         for i=1:numel(x_min)
             plot(x_min{i}(1), x_min{i}(2), 'ro', 'markersize', 10)
         end
-        figure
-        dist = sqrt((path(1,:)-x_min{1}(1)).^2+(path(2,:)-x_min{1}(2) ).^2);
-        plot(flip(log10(dist)), 1:length(dist));
-    else
-        % SVM case; just plot how convergence is occuring as a function of
-        % epochs
-        dist2opt = path;
-        for i = 1:length(x_min{1})
-            dist2opt(i,:) = dist2opt(i,:)-x_min{1}(i);
-        end
-        dists = sum(dist2opt.^2, 1);
-        yyaxis left;
-        plot(log10(sqrt(dists)));
-        yyaxis right;
-        plot(log10(grad_norm));
     end
 end

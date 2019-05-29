@@ -1,6 +1,6 @@
 function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
         probLineSearch(func, x0, f0, df0, search_direction, alpha0, verbosity, ...
-        outs, paras, var_f0, var_df0, grad_matrix, mu_k, w_k)
+        outs, paras, var_f0, var_df0, variance_option, grad_matrix, mu_k, w_k)
 % probLineSearch.m -- A probabilistic line search algorithm for nonlinear
 % optimization problems with noisy gradients. 
 %
@@ -107,8 +107,8 @@ end
 limit = 7; % maximum #function evaluations in one line search (+1)
 
 % constants for Wolfe conditions (must be chosen 0 < c1 < c2 < 1)
-c1 = 0.05;   % <---- DECIDED FIXED 0.05
-c2 = 0.5;    % <---- DECIDED FIXED 0.8
+%c1 = 0.05;   % <---- DECIDED FIXED 0.05
+%c2 = 0.5;    % <---- DECIDED FIXED 0.8
 % c2 = 0 extends until ascend location reached: lots of extrapolation
 % c2 = 1 accepts any point of increased gradient: almost no extrapolation
 
@@ -122,7 +122,10 @@ offset  = 10; % off-set, for numerical stability.
 EXT = 1; % extrapolation factor
 tt  = 1; % initial step size in scaled space
 
-global batchsize data;
+global batchsize data c1 c2;
+if isempty(variance_option)
+    variance_option = 0;
+end
 if ~isempty(mu_k) && ~isempty(w_k)
     % Use SVRG for gradient moves
     useSVRG = true;
@@ -159,7 +162,16 @@ beta = abs(search_direction'*df0); % scale f and df according to 1/(beta*alpha0)
 
 % -- scaled noise ---------------------------------------------------------
 sigmaf  = sqrt(var_f0)/(alpha0*beta); 
-sigmadf = sqrt((search_direction.^2)'*var_df0)/beta; 
+if variance_option > 1
+    % Compute improved variance
+    g0dot   = zeros(1, size(grad_matrix, 1));
+    for currIdx = 1:length(g0dot)
+        g0dot(currIdx) = grad_matrix(currIdx,:)*search_direction;
+    end
+    sigmadf = sqrt(1/(batchsize-1)*(1/batchsize*sum(g0dot.^2)-(sum(g0dot)/batchsize)^2))/beta;
+else
+    sigmadf = sqrt((search_direction.^2)'*var_df0)/beta;
+end
 
 % -- initiate data storage ------------------------------------------------
 T            = 0;
@@ -335,8 +347,8 @@ function evaluate_function()
     if useSVRG
         sidx = randsample(1:(size(data,1)), batchsize);
         [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction, sidx);
-        [~,grad_f_wk,~,~,~,~] = func(w_k', sidx);
-        dy = (dy + mu_k') - grad_f_wk;
+        [~,grad_f_wk,~,~,~,~] = func(w_k, sidx);
+        dy = (dy + mu_k) - grad_f_wk;
     else
         % y: function value at tt
         [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction);
@@ -363,6 +375,27 @@ function evaluate_function()
     Sigmadf      = [Sigmadf, var_df];
     N            = N + 1;
     
+    if variance_option > 1
+        % Compute improved variance
+        g0dot2   = zeros(1, size(grad_matrixT, 1));
+        for currIdx2 = 1:length(g0dot2)
+            g0dot2(currIdx2) = grad_matrixT(currIdx2,:)*search_direction;
+        end
+        sigmadf_test = sqrt(1/(batchsize-1)*(1/batchsize*sum(g0dot2.^2)-(sum(g0dot2)/batchsize)^2))/beta;
+    else
+        sigmadf_test = sqrt((search_direction.^2)'*var_df)/beta;
+    end
+    
+    if variance_option > 0
+        % Update variance; Take max of observed sigmaf, sigmadf
+        sigmaf_test  = sqrt(var_f)/(alpha0*beta);
+        if sigmaf_test > sigmaf
+            sigmaf = sigmaf_test;
+        end
+        if sigmadf_test > sigmadf
+            sigmadf = sigmadf_test;
+        end
+    end
 end
 
 % -- helper functions -----------------------------------------------------
