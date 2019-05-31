@@ -1,7 +1,9 @@
 % Understand average distance travelled, alpha, etc. with line search and
 % without line search. See where the 'distance' is being accumulated
 % Play with c1/c2 
-% Try adjusting both function and variance value in SVRG for PLS
+% Why does the line search 'transition' at certain points? (ls evals)
+
+% Create automatic function profiler
 
 function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
     epochIterations, hessianPeriod, maxEpoch, stepsize, memorySize, ...
@@ -48,7 +50,7 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
     for k = 0:maxEpoch
         % Compute full gradient for variance reduction
         batchsize = N;
-        [fFull, mu_k, ~, ~, ~, ~] = ff(w_k');
+        [fFull, mu_k, ~, ~, fVar_f, fVar_df] = ff(w_k');
         mu_k = mu_k';
         
         path = [path, w_k'];
@@ -86,6 +88,8 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
             [f_xt,grad_f_xt,~,~,var_f,var_df, g_m] = ff(x_t', sidx);
             [f_wk,grad_f_wk,~,~,~,~] = ff(w_k', sidx);
             v_t = (grad_f_xt' + mu_k) - grad_f_wk';
+            % Testing
+            f_t = (f_xt + fFull) - f_wk;
             
             %disp(['New function value: ' num2str(f_xt) '; New gradient norm: ' num2str(norm(grad_f_xt))]);
 
@@ -110,10 +114,10 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
             %Bound the effective gradient update step
             egNorm = norm(effGrad);
             divisor = 1;
-            while (egNorm/divisor > gradientNormBound)
-                %disp('Inflated divisor!');
-                divisor = divisor*10;
-            end
+%             while (egNorm/divisor > gradientNormBound)
+%                 %disp('Inflated divisor!');
+%                 divisor = divisor*10;
+%             end
             
             % Should a linesearch be used?
             if useLineSearch
@@ -122,28 +126,31 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
                 batchsize = b;
                 if useSVRG
                     if (r < 1)
-                        ls_out = ls_function(ff, x_t', f_xt, v_t', ...
+                        ls_out = ls_function(ff, x_t', f_t, v_t', ...
                             -effGrad', 1/(norm(v_t)*divisor), 0, [], [], ...
-                            var_f,var_df, variance_option, g_m, mu_k', w_k');
+                            var_f*sqrt((1E4-20)/20),var_df*sqrt((1E4-20)/20), variance_option, g_m, fFull, mu_k', w_k');
                     else 
-                        ls_out = ls_function(ff, x_t', f_xt, v_t', ...
-                            -effGrad', eta/divisor, 0, [], [], var_f, ...
-                            var_df, g_m, variance_option, mu_k', w_k');
+                        ls_out = ls_function(ff, x_t', f_t, v_t', ...
+                            -effGrad', 1/divisor, 0, [], [], var_f*sqrt((1E4-20)/20), ...
+                            var_df*sqrt((1E4-20)/20), g_m, variance_option, fFull, mu_k', w_k');
                     end 
                 else
                     if (r < 1)
                         ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, ...
                             -effGrad', 1/(norm(grad_f_xt)*divisor), 0, ...
-                            [], [], var_f,var_df, variance_option, g_m, [], []);
+                            [], [], var_f,var_df, variance_option, g_m, [], [], []);
                     else 
                         ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, ...
                             -effGrad', eta/divisor, 0, [], [], var_f, ...
-                            var_df, variance_option, g_m, [], []);
-                    end 
+                            var_df, variance_option, g_m, [], [], []);
+                    end
                 end
                 x_t = x_t - ls_out.step_size*effGrad;
+                %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' f_t: ' num2str(f_t) ' var_f: ' num2str(var_f) ' fFull: ' num2str(fFull) ' fVar_f: ' num2str(fVar_f)]);
+                disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' nLSEvals: ' num2str(ls_out.nLSEvals) ' stepsize: ' num2str(ls_out.step_size) ' f0: ' num2str(ls_out.f0) ' sigmaf: ' num2str(ls_out.sigmaf) ' df0: ' num2str(ls_out.df0) ' sigmadf: ' num2str(ls_out.sigmadf) ' beta: ' num2str(ls_out.beta)]);
             else
                 x_t = x_t - eta*effGrad/divisor;
+                disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' divisor: ' num2str(divisor) ' prod: ' num2str(norm(1/norm(v_t)*effGrad))]);
             end
             
             % Check to see if L iterations have passed (triggers hessian update)

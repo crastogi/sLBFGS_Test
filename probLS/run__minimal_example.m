@@ -26,7 +26,7 @@ global path nEpochs x_min data batchsize stochIters c1 c2;
 global vf vdf;
 
 % == CHANGE STUFF BELOW HERE ==============================================
-verbosity    = 1; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
+verbosity    = 0; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
 ff           = @noisyFunction;
 testfunction = 6;  % choose among 3 test functions (1, 2, 3)
 suppressPlot = 0;
@@ -34,13 +34,13 @@ suppressPlot = 0;
 % PLS + optimizer options
 useSLBFGS    = true;
 maxEpochs    = 1000;
-batchsize    = 200;
+batchsize    = 20;
 stochIters   = 50;
 probLSFunc   = @probLineSearch_mcsearch;   % can be null ([])
 useSVRG      = true;
-c1           = .05;
-c2           = .50;
-variance_option=1;   % 0: standard, 1: adaptive, 2: improved
+c1           = .01;
+c2           = .99;
+variance_option=0;   % 0: standard, 1: adaptive, 2: improved
 
 % sythetic noise standard deviations for function value and gradient
 sigmaf  = .01;
@@ -121,7 +121,7 @@ end % switch
 if useSLBFGS
     stepSize = .1;
     hessianPeriod = 10;
-    memorySize = 10;
+    memorySize = 50;
     [path, function_values, grad_norm] = sLBFGS(ff, x0, stochIters, ...
         hessianPeriod, maxEpochs, stepSize, memorySize, verbosity, ...
         probLSFunc, useSVRG, variance_option);
@@ -175,11 +175,11 @@ else
             if useSVRG
                 [outs, alpha0, f, df, xt, var_f, var_df] = probLSFunc(ff, xt, ...
                 f_xt, df, search_direction, alpha0, verbosity, outs, paras, ...
-                var_f, var_df, variance_option, g_m, muk, wk);
+                var_f, var_df, variance_option, g_m, fFull, muk, wk);
             else
                 [outs, alpha0, f, df, xt, var_f, var_df] = probLSFunc(ff, xt, ...
                 f_xt, df, search_direction, alpha0, verbosity, outs, paras, ...
-                var_f, var_df, variance_option, g_m, [], []);
+                var_f, var_df, variance_option, g_m, [], [], []);
             end
 
             % -- storage only for plot --------------------------------------------

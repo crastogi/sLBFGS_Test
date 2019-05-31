@@ -1,6 +1,6 @@
 function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
         probLineSearch(func, x0, f0, df0, search_direction, alpha0, verbosity, ...
-        outs, paras, var_f0, var_df0, variance_option, grad_matrix, mu_k, w_k)
+        outs, paras, var_f0, var_df0, variance_option, grad_matrix, fFull, mu_k, w_k)
 % probLineSearch.m -- A probabilistic line search algorithm for nonlinear
 % optimization problems with noisy gradients. 
 %
@@ -126,11 +126,13 @@ global batchsize data c1 c2;
 if isempty(variance_option)
     variance_option = 0;
 end
-if ~isempty(mu_k) && ~isempty(w_k)
+if ~isempty(mu_k) && ~isempty(w_k) && ~isempty(fFull)
     % Use SVRG for gradient moves
     useSVRG = true;
+    varmult = sqrt(2);
 else
     useSVRG = false;
+    varmult = 1;
 end
 
 % -- set up GP ------------------------------------------------------------
@@ -161,16 +163,16 @@ EI       = @(m,s,eta) (eta - m) .* GaussCDF((eta-m)./s) + s .* GaussPDF((eta-m).
 beta = abs(search_direction'*df0); % scale f and df according to 1/(beta*alpha0)
 
 % -- scaled noise ---------------------------------------------------------
-sigmaf  = sqrt(var_f0)/(alpha0*beta); 
+sigmaf  = varmult*sqrt(var_f0)/(alpha0*beta); 
 if variance_option > 1
     % Compute improved variance
     g0dot   = zeros(1, size(grad_matrix, 1));
     for currIdx = 1:length(g0dot)
         g0dot(currIdx) = grad_matrix(currIdx,:)*search_direction;
     end
-    sigmadf = sqrt(1/(batchsize-1)*(1/batchsize*sum(g0dot.^2)-(sum(g0dot)/batchsize)^2))/beta;
+    sigmadf = varmult*sqrt(1/(batchsize-1)*(1/batchsize*sum(g0dot.^2)-(sum(g0dot)/batchsize)^2))/beta;
 else
-    sigmadf = sqrt((search_direction.^2)'*var_df0)/beta;
+    sigmadf = varmult*sqrt((search_direction.^2)'*var_df0)/beta;
 end
 
 % -- initiate data storage ------------------------------------------------
@@ -346,9 +348,10 @@ function evaluate_function()
     outs.counter = outs.counter + 1;
     if useSVRG
         sidx = randsample(1:(size(data,1)), batchsize);
-        [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction, sidx);
-        [~,grad_f_wk,~,~,~,~] = func(w_k, sidx);
+        [y_t, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction, sidx);
+        [y_k,grad_f_wk,~,~,~,~] = func(w_k, sidx);
         dy = (dy + mu_k) - grad_f_wk;
+        y = (y_t + fFull) - y_k;
     else
         % y: function value at tt
         [y, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction);
@@ -390,10 +393,10 @@ function evaluate_function()
         % Update variance; Take max of observed sigmaf, sigmadf
         sigmaf_test  = sqrt(var_f)/(alpha0*beta);
         if sigmaf_test > sigmaf
-            sigmaf = sigmaf_test;
+            sigmaf = varmult*sigmaf_test;
         end
         if sigmadf_test > sigmadf
-            sigmadf = sigmadf_test;
+            sigmadf = varmult*sigmadf_test;
         end
     end
 end
@@ -710,6 +713,7 @@ function make_outs(y, dy, var_f, var_df)
     
     % Return output step size
     outs.step_size = tt*alpha0;
+    outs.nLSEvals = N;
     
     % set new set size
     % next initial step size is 1.3 times larger than last accepted step size
