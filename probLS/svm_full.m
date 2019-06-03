@@ -16,6 +16,7 @@ function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = svm_full(x, sampleidx,
     temp = max(0, 1-classes(sampleidx).*alpha);
     % Vector-compute function value
     f = sum(temp.^2)/(2*batchsize) + lambda*(x'*x)/2;
+    %lf = var(temp.^2/(2));
     
     % Mass-compute gradient
 %    classes(sampleidx).*alpha < 1 -> then compute gradient

@@ -113,44 +113,34 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
             
             %Bound the effective gradient update step
             egNorm = norm(effGrad);
-            divisor = 1;
-%             while (egNorm/divisor > gradientNormBound)
-%                 %disp('Inflated divisor!');
-%                 divisor = divisor*10;
-%             end
+            if ~useLineSearch
+                divisor = 1;
+                while (egNorm/divisor > gradientNormBound)
+                    %disp('Inflated divisor!');
+                    divisor = divisor*10;
+                end                
+            end
             
             % Should a linesearch be used?
             if useLineSearch
                 % Compute eta; different methods until one hessian 
                 % correction takes place
                 batchsize = b;
-                if useSVRG
-                    if (r < 1)
-                        ls_out = ls_function(ff, x_t', f_t, v_t', ...
-                            -effGrad', 1/(norm(v_t)*divisor), 0, [], [], ...
-                            var_f*sqrt((1E4-20)/20),var_df*sqrt((1E4-20)/20), variance_option, g_m, fFull, mu_k', w_k');
-                    else 
-                        ls_out = ls_function(ff, x_t', f_t, v_t', ...
-                            -effGrad', 1/divisor, 0, [], [], var_f*sqrt((1E4-20)/20), ...
-                            var_df*sqrt((1E4-20)/20), g_m, variance_option, fFull, mu_k', w_k');
-                    end 
+                if (r < 1)
+                    ls_out = ls_function(ff, x_t', f_t, v_t', -effGrad',...
+                        eta/norm(v_t), 0, [], [], var_f, ...
+                        var_df, 0, [], fFull, mu_k', w_k');
                 else
-                    if (r < 1)
-                        ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, ...
-                            -effGrad', 1/(norm(grad_f_xt)*divisor), 0, ...
-                            [], [], var_f,var_df, variance_option, g_m, [], [], []);
-                    else 
-                        ls_out = ls_function(ff, x_t', f_xt, grad_f_xt, ...
-                            -effGrad', eta/divisor, 0, [], [], var_f, ...
-                            var_df, variance_option, g_m, [], [], []);
-                    end
+                    ls_out = ls_function(ff, x_t', f_t, v_t', -effGrad',...
+                        eta, 0, [], [], var_f, ...
+                        var_df, 0, [], fFull, mu_k', w_k');
                 end
                 x_t = x_t - ls_out.step_size*effGrad;
                 %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' f_t: ' num2str(f_t) ' var_f: ' num2str(var_f) ' fFull: ' num2str(fFull) ' fVar_f: ' num2str(fVar_f)]);
-                disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' nLSEvals: ' num2str(ls_out.nLSEvals) ' stepsize: ' num2str(ls_out.step_size) ' f0: ' num2str(ls_out.f0) ' sigmaf: ' num2str(ls_out.sigmaf) ' df0: ' num2str(ls_out.df0) ' sigmadf: ' num2str(ls_out.sigmadf) ' beta: ' num2str(ls_out.beta)]);
+                %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' nLSEvals: ' num2str(ls_out.nLSEvals) ' stepsize: ' num2str(ls_out.step_size) ' f0: ' num2str(ls_out.f0) ' sigmaf: ' num2str(ls_out.sigmaf) ' df0: ' num2str(ls_out.df0) ' sigmadf: ' num2str(ls_out.sigmadf) ' beta: ' num2str(ls_out.beta)]);
             else
                 x_t = x_t - eta*effGrad/divisor;
-                disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' divisor: ' num2str(divisor) ' prod: ' num2str(norm(1/norm(v_t)*effGrad))]);
+                %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' divisor: ' num2str(divisor) ' prod: ' num2str(norm(1/norm(v_t)*effGrad))]);
             end
             
             % Check to see if L iterations have passed (triggers hessian update)

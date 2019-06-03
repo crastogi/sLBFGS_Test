@@ -29,7 +29,7 @@ global vf vdf;
 verbosity    = 0; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
 ff           = @noisyFunction;
 testfunction = 6;  % choose among 3 test functions (1, 2, 3)
-suppressPlot = 0;
+suppressPlot = 1;
 
 % PLS + optimizer options
 useSLBFGS    = true;
@@ -40,7 +40,7 @@ probLSFunc   = @probLineSearch_mcsearch;   % can be null ([])
 useSVRG      = true;
 c1           = .01;
 c2           = .99;
-variance_option=0;   % 0: standard, 1: adaptive, 2: improved
+variance_option=2;   % 0: standard, 1: adaptive, 2: improved
 
 % sythetic noise standard deviations for function value and gradient
 sigmaf  = .01;

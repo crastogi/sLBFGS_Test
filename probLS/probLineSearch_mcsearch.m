@@ -107,7 +107,7 @@ GaussCDF = @(z) 0.5 * (1 + erf(z/sqrt(2)));
 % constants for Wolfe conditions (must be chosen 0 < c1 < c2 < 1)
 %c1 = 0.0001;   
 %c2 = 0.99; 
-WolfeThreshold = 0.3; % Condition to trigger acceptance of wolfe criteria
+WolfeThreshold = 0.2; % Condition to trigger acceptance of wolfe criteria
 maxFuncEvals = 7; % maximum #function evaluations in one line search (+1)
 smallStepSize = 0.01; % size of non-dimensional step to take when failure occurs
 lastStep = false;
@@ -119,7 +119,7 @@ if isempty(variance_option)
     variance_option = 0;
 end
 if ~isempty(mu_k) && ~isempty(w_k) && ~isempty(fFull)
-    % Use SVRG for gradient moves
+    % Use SVRG for gradient moves; ensure variance comes from SVRG sample
     useSVRG = true;
     varmult = sqrt(2);
 else
@@ -333,7 +333,9 @@ function gp_wolfe_diag()
     figure;
     yyaxis left; plot(x_axis, f_outs); hold on; plot(x_axis, w1_vals); ylabel('GP Function Value');
     yyaxis right; plot(x_axis, g_outs); ylabel('GP Gradient Value');
-    hold on; line([min(x_axis) max(x_axis)], [c2*d1m(0) c2*d1m(0)]); line([min(x_axis) max(x_axis)], [-c2*d1m(0) -c2*d1m(0)]);
+    hold on; 
+    line([min(x_axis) max(x_axis)], [c2*d1m(0) c2*d1m(0)], 'LineStyle', '--'); 
+    line([min(x_axis) max(x_axis)], [-c2*d1m(0) -c2*d1m(0)], 'LineStyle', '--');
 end
 
 % *************************************************************************
@@ -425,7 +427,7 @@ function [alphaT] = mcsearch(alphaT)
         end
         % If unusual termination is about to occur, let alphaT be the lowest point found so far
         if ( (isBracketed && (alphaT<=alphaMin || alphaT>=alphaMax)) || nLSEvals>=maxMCSearchIters-1) 
-            if verbosity > 1
+            if verbosity > 0
                 disp("UNUSUAL TERMINATION!");
             end
             alphaT = max(T)*2;

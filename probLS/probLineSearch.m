@@ -160,8 +160,8 @@ GaussPDF = @(z) exp( - 0.5 * z.^2 ) ./ sqrt(2*pi);
 EI       = @(m,s,eta) (eta - m) .* GaussCDF((eta-m)./s) + s .* GaussPDF((eta-m)./s);
 
 % -- scale ----------------------------------------------------------------
-beta = abs(search_direction'*df0); % scale f and df according to 1/(beta*alpha0)
-
+%beta = abs(search_direction'*df0); % scale f and df according to 1/(beta*alpha0)
+beta = norm(df0);
 % -- scaled noise ---------------------------------------------------------
 sigmaf  = varmult*sqrt(var_f0)/(alpha0*beta); 
 if variance_option > 1
@@ -714,6 +714,11 @@ function make_outs(y, dy, var_f, var_df)
     % Return output step size
     outs.step_size = tt*alpha0;
     outs.nLSEvals = N;
+    outs.sigmaf = sigmaf;
+    outs.sigmadf= sigmadf;
+    outs.f0 = Y(1);
+    outs.df0 = dY_projected(1);
+    outs.beta = beta;
     
     % set new set size
     % next initial step size is 1.3 times larger than last accepted step size
