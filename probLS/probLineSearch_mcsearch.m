@@ -128,7 +128,7 @@ else
 end
 
 % BEGIN LINE SEARCH
-tt  = 1; % initial step size in scaled space
+tt  = 1 ; % initial step size in scaled space
 % Compute scaling factor beta
 %beta = abs(search_direction'*df0); % scale f and df according to 1/(beta*alpha0)
 beta = norm(df0);

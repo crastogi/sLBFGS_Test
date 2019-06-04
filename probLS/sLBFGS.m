@@ -7,7 +7,7 @@
 
 function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
     epochIterations, hessianPeriod, maxEpoch, stepsize, memorySize, ...
-    verbosity, ls_function, useSVRG, variance_option)
+    verbosity, ls_function)
     if (isempty(ls_function))
         useLineSearch = 0;
     else 
@@ -52,6 +52,7 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
         batchsize = N;
         [fFull, mu_k, ~, ~, fVar_f, fVar_df] = ff(w_k');
         mu_k = mu_k';
+        var_scale = (N-b)/b;
         
         path = [path, w_k'];
         function_values = [function_values, fFull];
@@ -84,12 +85,11 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
             % Compute the current stochastic gradient estimate; begin by sampling a minibatch
             batchsize = b;
             sidx = randsample(1:(size(data,1)), batchsize);
-            % Next, compute the reduced variance gradient
-            [f_xt,grad_f_xt,~,~,var_f,var_df, g_m] = ff(x_t', sidx);
+            % Next, compute the reduced variance function and gradient
+            [f_xt,grad_f_xt,~,~,~,~] = ff(x_t', sidx);
             [f_wk,grad_f_wk,~,~,~,~] = ff(w_k', sidx);
-            v_t = (grad_f_xt' + mu_k) - grad_f_wk';
-            % Testing
             f_t = (f_xt + fFull) - f_wk;
+            v_t = (grad_f_xt' + mu_k) - grad_f_wk';
             
             %disp(['New function value: ' num2str(f_xt) '; New gradient norm: ' num2str(norm(grad_f_xt))]);
 
@@ -128,16 +128,16 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
                 batchsize = b;
                 if (r < 1)
                     ls_out = ls_function(ff, x_t', f_t, v_t', -effGrad',...
-                        eta/norm(v_t), 0, [], [], var_f, ...
-                        var_df, 0, [], fFull, mu_k', w_k');
+                        eta/norm(v_t), verbosity, [], [], fVar_f*var_scale, ...
+                        fVar_df*var_scale, 0, [], fFull, mu_k', w_k');
                 else
                     ls_out = ls_function(ff, x_t', f_t, v_t', -effGrad',...
-                        eta, 0, [], [], var_f, ...
-                        var_df, 0, [], fFull, mu_k', w_k');
+                        eta, 0, [], [], fVar_f*var_scale, ...
+                        fVar_df*var_scale, verbosity, [], fFull, mu_k', w_k');
                 end
                 x_t = x_t - ls_out.step_size*effGrad;
                 %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' f_t: ' num2str(f_t) ' var_f: ' num2str(var_f) ' fFull: ' num2str(fFull) ' fVar_f: ' num2str(fVar_f)]);
-                %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' nLSEvals: ' num2str(ls_out.nLSEvals) ' stepsize: ' num2str(ls_out.step_size) ' f0: ' num2str(ls_out.f0) ' sigmaf: ' num2str(ls_out.sigmaf) ' df0: ' num2str(ls_out.df0) ' sigmadf: ' num2str(ls_out.sigmadf) ' beta: ' num2str(ls_out.beta)]);
+                disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' nLSEvals: ' num2str(ls_out.nLSEvals) ' stepsize: ' num2str(ls_out.step_size) ' f0: ' num2str(ls_out.f0) ' sigmaf: ' num2str(ls_out.sigmaf) ' df0: ' num2str(ls_out.df0) ' sigmadf: ' num2str(ls_out.sigmadf) ' beta: ' num2str(ls_out.beta)]);
             else
                 x_t = x_t - eta*effGrad/divisor;
                 %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' divisor: ' num2str(divisor) ' prod: ' num2str(norm(1/norm(v_t)*effGrad))]);

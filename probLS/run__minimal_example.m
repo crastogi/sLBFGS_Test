@@ -26,7 +26,7 @@ global path nEpochs x_min data batchsize stochIters c1 c2;
 global vf vdf;
 
 % == CHANGE STUFF BELOW HERE ==============================================
-verbosity    = 0; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
+verbosity    = 1; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
 ff           = @noisyFunction;
 testfunction = 6;  % choose among 3 test functions (1, 2, 3)
 suppressPlot = 1;
@@ -40,7 +40,7 @@ probLSFunc   = @probLineSearch_mcsearch;   % can be null ([])
 useSVRG      = true;
 c1           = .01;
 c2           = .99;
-variance_option=2;   % 0: standard, 1: adaptive, 2: improved
+variance_option=0;   % 0: standard, 1: adaptive, 2: improved
 
 % sythetic noise standard deviations for function value and gradient
 sigmaf  = .01;
@@ -124,7 +124,7 @@ if useSLBFGS
     memorySize = 50;
     [path, function_values, grad_norm] = sLBFGS(ff, x0, stochIters, ...
         hessianPeriod, maxEpochs, stepSize, memorySize, verbosity, ...
-        probLSFunc, useSVRG, variance_option);
+        probLSFunc);
     nEpochs = size(path,2);
 else
     nEpochs = 0;

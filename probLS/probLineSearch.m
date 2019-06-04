@@ -112,7 +112,7 @@ limit = 7; % maximum #function evaluations in one line search (+1)
 % c2 = 0 extends until ascend location reached: lots of extrapolation
 % c2 = 1 accepts any point of increased gradient: almost no extrapolation
 
-WolfeThreshold = 0.3; % <---- DECIDED FIXED (0.3)
+WolfeThreshold = 0.2; % <---- DECIDED FIXED (0.3)
 % the new free parameter of this method relative to sgd: 
 % search is terminated when probability(Wolfe conditions hold) > WolfeThreshold
 % not sensitive between 0.1 and 0.8 (0 = accept everyting, 1= accept nothing)
