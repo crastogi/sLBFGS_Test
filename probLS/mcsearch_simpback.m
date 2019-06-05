@@ -1,7 +1,7 @@
 % Incorporates mcsearch with the superior gradient variance estimator and
 % the adaptive noise concept
 function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
-        mcsearch(func, x0, f0, df0, search_direction, ...
+        mcsearch_simpback(func, x0, f0, df0, search_direction, ...
         alpha0, verbosity, outs, paras, var_f0, var_df0, variance_option,...
         grad_matrix, fFull, mu_k, w_k)
 % probLineSearch.m -- A probabilistic line search algorithm for nonlinear
@@ -128,13 +128,13 @@ else
 end
 
 % BEGIN LINE SEARCH
-tt  = 1 ; % initial step size in scaled space
+tt  =1 ; % initial step size in scaled space
 % Compute scaling factor beta
 %beta = abs(search_direction'*df0); % scale f and df according to 1/(beta*alpha0)
 beta = norm(df0);
 
 % Compute noise for starting point (T=0)?
-sigmaf  = varmult*sqrt(var_f0)/beta;
+sigmaf  = varmult*sqrt(var_f0)/beta; 
 if variance_option > 1
     % Compute improved variance
     g0dot   = zeros(1, size(grad_matrix, 1));
@@ -155,6 +155,7 @@ dY_projected = (df0'*search_direction)/beta;
 Sigmaf       = var_f0;
 Sigmadf      = var_df0;
 N            = 1;
+negEval      = false;
 
 % Update GP at starting point
 updateGP();
@@ -197,17 +198,22 @@ while true
     % not, it means the GP believes the objective function is increasing,
     % and the gradient direction is NOT a descent direction. Take a really
     % small step and terminate.
-     if d1m(0) > 0
-        if verbosity > 0
-            disp(['GP detects that the current direction is not a descent direction; taking a small step and terminating. Number of line search iterations: ' num2str(N) '; T string: ' num2str(T')]);
-            %gp_wolfe_diag();
+    if d1m(0) > 0
+        if negEval
+            if verbosity > 0
+                disp(['GP detects that the current direction is not a descent direction; taking a small step and terminating. Number of line search iterations: ' num2str(N) '; T string: ' num2str(T')]);
+            end
+            % Evaluate function at small step size
+            tt = smallStepSize;
+            evaluate_function();
+            make_outs(y, dy, var_f, var_df);
+            outs.negDir = true;
+            return;
+        else
+            tt = -1;
+            negEval = true;
+            continue;
         end
-        % Evaluate function at small step size
-        tt = smallStepSize;
-        evaluate_function();
-        make_outs(y, dy, var_f, var_df);
-        outs.negDir = true;
-        return;
     end
     
     % The following can have two alternatives: Accept point only if it

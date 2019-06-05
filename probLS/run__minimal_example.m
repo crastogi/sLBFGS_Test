@@ -22,11 +22,11 @@
 % (C) 2015, Maren Mahsereci (mmahsereci@tue.mpg.de)
 
 clearvars -except totEpochs nSamples nDataPoints totDist;
-global path nEpochs x_min data batchsize stochIters c1 c2;
+global path nEpochs x_min data batchsize stochIters c1 c2 WolfeThreshold;
 global vf vdf;
 
 % == CHANGE STUFF BELOW HERE ==============================================
-verbosity    = 1; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
+verbosity    = 0; % 0: silence, 1: speak, 2: plot simple, 3: plot full (slow)
 ff           = @noisyFunction;
 testfunction = 6;  % choose among 3 test functions (1, 2, 3)
 suppressPlot = 1;
@@ -36,10 +36,11 @@ useSLBFGS    = true;
 maxEpochs    = 1000;
 batchsize    = 20;
 stochIters   = 50;
-probLSFunc   = @probLineSearch_mcsearch;   % can be null ([])
+probLSFunc   = @mcsearch;   % can be null ([])
 useSVRG      = true;
 c1           = .01;
 c2           = .99;
+WolfeThreshold=.3;
 variance_option=0;   % 0: standard, 1: adaptive, 2: improved
 
 % sythetic noise standard deviations for function value and gradient

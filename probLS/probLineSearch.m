@@ -112,7 +112,7 @@ limit = 7; % maximum #function evaluations in one line search (+1)
 % c2 = 0 extends until ascend location reached: lots of extrapolation
 % c2 = 1 accepts any point of increased gradient: almost no extrapolation
 
-WolfeThreshold = 0.2; % <---- DECIDED FIXED (0.3)
+%WolfeThreshold = 0.25; % <---- DECIDED FIXED (0.3)
 % the new free parameter of this method relative to sgd: 
 % search is terminated when probability(Wolfe conditions hold) > WolfeThreshold
 % not sensitive between 0.1 and 0.8 (0 = accept everyting, 1= accept nothing)
@@ -122,7 +122,7 @@ offset  = 10; % off-set, for numerical stability.
 EXT = 1; % extrapolation factor
 tt  = 1; % initial step size in scaled space
 
-global batchsize data c1 c2;
+global batchsize data c1 c2 WolfeThreshold;
 if isempty(variance_option)
     variance_option = 0;
 end
@@ -163,7 +163,7 @@ EI       = @(m,s,eta) (eta - m) .* GaussCDF((eta-m)./s) + s .* GaussPDF((eta-m).
 %beta = abs(search_direction'*df0); % scale f and df according to 1/(beta*alpha0)
 beta = norm(df0);
 % -- scaled noise ---------------------------------------------------------
-sigmaf  = varmult*sqrt(var_f0)/(alpha0*beta); 
+sigmaf  = varmult*sqrt(var_f0)/beta;
 if variance_option > 1
     % Compute improved variance
     g0dot   = zeros(1, size(grad_matrix, 1));
@@ -257,6 +257,7 @@ while N < limit+1
                 % -- prepare output -----------------------------------------------
                 dy = dY(:, T == tt); y = Y(T == tt); var_f = Sigmaf(T == tt); var_df = Sigmadf(:, T==tt);    
                 make_outs(y, dy, var_f, var_df);
+                outs.negDir = true;
                 return; % done 
             end
         end
@@ -366,8 +367,8 @@ function evaluate_function()
     end
     
     % -- scale f and df ---------------------------------------------------
-    y            = (y - f0)/(alpha0*beta);        % substract offset    
-    dy_projected = (dy'*search_direction)/beta;   % projected gradient 
+    y            = (y - f0)/beta;                    % substract offset    
+    dy_projected = dot(dy,search_direction)/beta;   % projected gradient 
     
     % -- store ------------------------------------------------------------
     T            = [T; tt]; 
@@ -391,7 +392,7 @@ function evaluate_function()
     
     if variance_option > 0
         % Update variance; Take max of observed sigmaf, sigmadf
-        sigmaf_test  = sqrt(var_f)/(alpha0*beta);
+        sigmaf_test  = sqrt(var_f)/beta;
         if sigmaf_test > sigmaf
             sigmaf = varmult*sigmaf_test;
         end
@@ -706,7 +707,7 @@ end
 function make_outs(y, dy, var_f, var_df)
     
     x_tt      = x0 + tt*alpha0*search_direction; % accepted position
-    y_tt      = y*(alpha0*beta) + f0;            % function value at accepted position
+    y_tt      = y*beta + f0;                     % function value at accepted position
     dy_tt     = dy;                              % gradient at accepted position
     var_f_tt  = var_f;                           % variance of function value at accepted position
     var_df_tt = var_df;                          % variance of gradients at accepted position
@@ -719,6 +720,7 @@ function make_outs(y, dy, var_f, var_df)
     outs.f0 = Y(1);
     outs.df0 = dY_projected(1);
     outs.beta = beta;
+    outs.negDir = false;
     
     % set new set size
     % next initial step size is 1.3 times larger than last accepted step size

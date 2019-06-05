@@ -45,6 +45,12 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
     path = [];
     function_values = [];
     grad_norm = [];
+    
+    prevF = Inf;
+    nCorrectDirs = 0;
+    nIncorrectDirs = 0;
+    totNegative = 0;
+    falseNegative = 0;
 
     % Loop over epochs 
     for k = 0:maxEpoch
@@ -70,6 +76,8 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
         % Check for convergence, final epoch
         if (norm(mu_k)/max([1 norm(w_k)]) < epsilon)
             disp("Convergence!");
+            disp(nCorrectDirs/(nCorrectDirs+nIncorrectDirs));
+            disp([falseNegative totNegative]);
             batchsize = b;
             return;
         end
@@ -132,8 +140,8 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
                         fVar_df*var_scale, 0, [], fFull, mu_k', w_k');
                 else
                     ls_out = ls_function(ff, x_t', f_t, v_t', -effGrad',...
-                        eta, 0, [], [], fVar_f*var_scale, ...
-                        fVar_df*var_scale, verbosity, [], fFull, mu_k', w_k');
+                        eta, verbosity, [], [], fVar_f*var_scale, ...
+                        fVar_df*var_scale, 0, [], fFull, mu_k', w_k');
                 end
                 x_t = x_t - ls_out.step_size*effGrad;
                 %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' f_t: ' num2str(f_t) ' var_f: ' num2str(var_f) ' fFull: ' num2str(fFull) ' fVar_f: ' num2str(fVar_f)]);
@@ -142,6 +150,23 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
                 x_t = x_t - eta*effGrad/divisor;
                 %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' divisor: ' num2str(divisor) ' prod: ' num2str(norm(1/norm(v_t)*effGrad))]);
             end
+            
+                        
+            % Check to see if effGrad is actually a descent direction
+%             batchsize = N;
+%             [fullF,~,~,~,~,~] = ff(x_t');
+%             if (fullF < prevF)
+%                 nCorrectDirs = nCorrectDirs + 1;
+%             else
+%                 nIncorrectDirs = nIncorrectDirs + 1;
+%             end
+%             if (ls_out.negDir) 
+%                 totNegative = totNegative + 1;
+%                 if (fullF < prevF)
+%                     falseNegative = falseNegative + 1;
+%                 end
+%             end
+%             prevF = fullF;
             
             % Check to see if L iterations have passed (triggers hessian update)
             if (mod(t,L) == 0)

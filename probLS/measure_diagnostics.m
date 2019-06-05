@@ -4,7 +4,7 @@ global totEpochs totDist nDataPoints nSamples path nEpochs x_min data batchsize 
 totEpochs = 0;
 totDist = 0;
 nDataPoints = 0;
-nSamples = 10;
+nSamples = 50;
 
 for q = 1:nSamples
     run__minimal_example;

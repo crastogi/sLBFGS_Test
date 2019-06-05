@@ -1,7 +1,7 @@
 % Incorporates mcsearch with the superior gradient variance estimator and
 % the adaptive noise concept
 function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
-        mcsearch(func, x0, f0, df0, search_direction, ...
+        mcsearch_backtrack(func, x0, f0, df0, search_direction, ...
         alpha0, verbosity, outs, paras, var_f0, var_df0, variance_option,...
         grad_matrix, fFull, mu_k, w_k)
 % probLineSearch.m -- A probabilistic line search algorithm for nonlinear
@@ -107,10 +107,9 @@ GaussCDF = @(z) 0.5 * (1 + erf(z/sqrt(2)));
 % constants for Wolfe conditions (must be chosen 0 < c1 < c2 < 1)
 %c1 = 0.0001;   
 %c2 = 0.99; 
-%WolfeThreshold = 0.25; % Condition to trigger acceptance of wolfe criteria
+%WolfeThreshold = 0.275; % Condition to trigger acceptance of wolfe criteria
 maxFuncEvals = 7; % maximum #function evaluations in one line search (+1)
 smallStepSize = 0.1; % size of non-dimensional step to take when failure occurs
-lastStep = false;
 stepAlphaMin = 1e-20;
 stepAlphaMax = 1e20;
 maxMCSearchIters = 10;
@@ -134,7 +133,7 @@ tt  = 1 ; % initial step size in scaled space
 beta = norm(df0);
 
 % Compute noise for starting point (T=0)?
-sigmaf  = varmult*sqrt(var_f0)/beta;
+sigmaf  = varmult*sqrt(var_f0)/beta; 
 if variance_option > 1
     % Compute improved variance
     g0dot   = zeros(1, size(grad_matrix, 1));
@@ -155,6 +154,8 @@ dY_projected = (df0'*search_direction)/beta;
 Sigmaf       = var_f0;
 Sigmadf      = var_df0;
 N            = 1;
+neg_direction= false;
+pos_neg_fail = false; 
 
 % Update GP at starting point
 updateGP();
@@ -173,7 +174,7 @@ while true
         search_direction = search_direction/norm(search_direction);
         tt = 1;
         beta = norm(df0);
-        sigmaf = sqrt(var_f0)/beta;
+        sigmaf = sqrt(var_f0)/(alpha0*beta);
         g0dot   = search_direction;
         for currIdx = 1:length(grad_matrix)
             g0dot(currIdx) = grad_matrix(currIdx,:)*search_direction;
@@ -197,69 +198,62 @@ while true
     % not, it means the GP believes the objective function is increasing,
     % and the gradient direction is NOT a descent direction. Take a really
     % small step and terminate.
-     if d1m(0) > 0
+    if neg_direction && d1m(0) < 0 && ~pos_neg_fail
+        % Prevents the line search from going back and forth in the
+        % positive and negative direction
         if verbosity > 0
-            disp(['GP detects that the current direction is not a descent direction; taking a small step and terminating. Number of line search iterations: ' num2str(N) '; T string: ' num2str(T')]);
-            %gp_wolfe_diag();
+            disp(['GP gradient at origin has flipped sign 2 times!']);
         end
-        % Evaluate function at small step size
-        tt = smallStepSize;
-        evaluate_function();
+        pos_neg_fail = true;
+    elseif d1m(0) > 0 && neg_direction
+        % Do nothing
+    elseif d1m(0) > 0
+        if verbosity > 0
+            disp(['GP detects that the current direction is not a descent direction']);
+        end
+        if ~neg_direction && ~pos_neg_fail
+            % Start by evaluating function in the negative direction
+            tt = -1;
+            continue;
+        else
+            if verbosity > 0
+                disp(['GP is unable to resolve gradient at origin!']);
+            end
+            % Evaluate function at small step size
+            tt = smallStepSize;
+            evaluate_function();
+            make_outs(y, dy, var_f, var_df);
+            return;
+        end
+    end
+    
+    % Next, confirm if the new point satisfies the wolfe conditions
+    % Loop over all evaluated positions, except the original point; use
+    % Wolfe probabilities and GP means to accept points
+    wolfe_values= zeros(1, length(T));      % Ensure idx=1 has WP=0
+    gp_means    = wolfe_values;
+    % Start by evlauating GP and wolfe probability
+    for currT = 2:length(T)
+        wolfe_values(currT) = probWolfe(T(currT));
+        gp_means(currT)     = m(T(currT));
+    end
+    % See what points match wolfe criteria
+    wolfe_idx = wolfe_values>WolfeThreshold;
+    if sum(wolfe_idx)>0
+        % Points exist that match wolfe criteria. Find optimal one
+        if verbosity > 0
+            disp(['Found acceptable point. Number of line search iterations: ' num2str(N) '; T string: ' num2str(T')]);
+        end
+        T_temp  = T(wolfe_idx);
+        gp_means= gp_means(wolfe_idx);
+        [~, min_gp_idx] = min(gp_means);
+        tt = T_temp(min_gp_idx);
+        
+        % Find the corresponding gradient and variances of optimal pt
+        dy = dY(:, T == tt); y = Y(T == tt); var_f = Sigmaf(T == tt); var_df = Sigmadf(:, T==tt);
         make_outs(y, dy, var_f, var_df);
-        outs.negDir = true;
         return;
     end
-    
-    % The following can have two alternatives: Accept point only if it
-    % satisfies WC on latest point, or accept ANY point that satisfies WC
-    % the most. This seems most permissive...
-    % Next, confirm if the new point satisfies the wolfe conditions
-    if lastStep
-        if probWolfe(tt) > WolfeThreshold % are we done?
-            if verbosity > 0
-                disp(['Found acceptable point. Number of line search iterations: ' num2str(N) '; T string: ' num2str(T')]); 
-            end
-            make_outs(y, dy, var_f, var_df);
-            return;   
-        end
-    else
-        % Loop over all evaluated positions, except the original point; use
-        % Wolfe probabilities and GP means to accept points
-        wolfe_values= zeros(1, length(T));      % Ensure idx=1 has WP=0
-        gp_means    = wolfe_values;
-        % Start by evlauating GP and wolfe probability
-        for currT = 2:length(T)
-            wolfe_values(currT) = probWolfe(T(currT));
-            gp_means(currT)     = m(T(currT));  
-        end
-        % See what points match wolfe criteria
-        wolfe_idx = wolfe_values>WolfeThreshold;
-        if sum(wolfe_idx)>0
-            % Points exist that match wolfe criteria. Find optimal one
-            if verbosity > 0
-                disp(['Found acceptable point. Number of line search iterations: ' num2str(N) '; T string: ' num2str(T')]); 
-            end
-            T_temp  = T(wolfe_idx);
-            gp_means= gp_means(wolfe_idx);
-            [~, min_gp_idx] = min(gp_means);
-            tt = T_temp(min_gp_idx);
-            
-            % Find the corresponding gradient and variances of optimal pt
-            dy = dY(:, T == tt); y = Y(T == tt); var_f = Sigmaf(T == tt); var_df = Sigmadf(:, T==tt);    
-            make_outs(y, dy, var_f, var_df);
-            return; 
-        end
-    end
-    
-    % Compute alternative acceptance criteria/see if old points satsify WC?
-    % We will ignore this for now...
-	% -- check this point as well for acceptance --------------------------
-%     if abs(dmin) < 1e-5 && Vd(tmin) < 1e-4 % nearly deterministic
-%         tt = tmin; dy = dY(:, minj); y = Y(minj); var_f = Sigmaf(minj); var_df = Sigmadf(:, minj);        
-%         disp('found a point with almost zero gradient. Stopping, although Wolfe conditions not guaranteed.')
-%         make_outs(y, dy, var_f, var_df);
-%         return;
-%     end
     
     % Check to see if the number of line search steps has been exceeded
     if N >= maxFuncEvals+1
@@ -270,22 +264,35 @@ while true
     % test point using mcsearch.
     % (todo) Need to figure out the best way to initialize alpha for
     % mcsearch.
-    try 
-        tt = mcsearch(max(T));
+    try
+        if d1m(min(T)) > 0 && min(T)<0
+            tt = min(T)*2;
+        else
+            tt = mcsearch(max(T) - min(T)) + min(T);
+        end
         % Check to see if tt has already been tested (occurs when an
         % existing point satisfies the non-probabilistic wolfe conditions)
         if sum(ismember(T, tt))~=0
             %disp('tt has the same value as existing T value being tested!');
-            % Check to see if tt is the same as the rightmost point tested
+            % Check to see if direction is ascent or descent
             T_sorted = sort(T);
             T_idx = find(T_sorted==tt);
-            if (T_idx==length(T))
-                % tt IS the rightmost point tested
-                tt = max(T)*2;
-            else 
-                % Set new tt to be the average between it and the point
-                % right of it
-                tt = (T_sorted(T_idx)+T_sorted(T_idx+1))/2;
+            if d1m(0) > 0
+                % if ascent direction, check to see if tt is the same as 
+                % the leftmost point tested
+                if tt==min(T)
+                    tt = min(T)*2;
+                else
+                    tt = (T_sorted(T_idx)+T_sorted(T_idx-1))/2;
+                end
+            else
+                % if descent direction, check to see if tt is the same as
+                % the rightmost point tested
+                if tt==max(T)
+                    tt = max(T)*2;
+                else
+                    tt = (T_sorted(T_idx)+T_sorted(T_idx+1))/2;
+                end
             end
         end
     catch mcsearch_error
@@ -350,8 +357,8 @@ function [alphaT] = mcsearch(alphaT)
     
     % Initialize variables: These are trivial inputs for the GP
     %x0MC = 0;
-    f0MC = m(0);
-    g0MC = d1m(0);
+    f0MC = m(0 + min(T));
+    g0MC = d1m(0 + min(T));
     
     % These parameters are shared with mcstep
     alphaL			= 0;
@@ -377,8 +384,8 @@ function [alphaT] = mcsearch(alphaT)
 %        disp('Executing one line search step.');
         
         % Evaluate function
-        fT	= m(alphaT);
-        gT	= d1m(alphaT);
+        fT = m(alphaT + min(T));
+        gT = d1m(alphaT + min(T));
         nLSEvals = nLSEvals + 1;
 
         % Check for convergence
@@ -592,11 +599,6 @@ function make_outs(y, dy, var_f, var_df)
         
     % Return output step size
     outs.step_size = tt*alpha0;
-    
-    % (todo) get rid of all these alpha resets
-    % set new set size
-    % next initial step size is 1.3 times larger than last accepted step size
-    alpha0_out = tt*alpha0 * 1.3;
 
     % running average for reset in case the step size becomes very small
     % this is a saveguard
@@ -608,15 +610,10 @@ function make_outs(y, dy, var_f, var_df)
     outs.f0 = Y(1);
     outs.df0 = dY_projected(1);
     outs.beta = beta;
-    outs.negDir = false;
-    
-    % reset NEXT initial step size to average step size if accepted step
-    % size is 100 times smaller or larger than average step size
-    if (alpha0_out > 1e2*outs.alpha_stats)||(alpha0_out < 1e-2*outs.alpha_stats)
-        if verbosity > 0
-            disp 'making a very small step, resetting alpha0'; 
-        end
-        alpha0_out = outs.alpha_stats; % reset step size
+    if (d1m(0)>0)
+        outs.negDir = true;
+    else
+        outs.negDir = false;
     end
 end
 end
