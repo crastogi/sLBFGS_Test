@@ -21,7 +21,7 @@
 %
 % (C) 2015, Maren Mahsereci (mmahsereci@tue.mpg.de)
 
-clearvars -except totEpochs nSamples nDataPoints totDist;
+clearvars -except totEpochs nSamples nDataPoints totDist q measureMoves totICDirs totCDirs totTP totFP totTN totFN nIncorrectDirs nCorrectDirs truePositive falsePositive trueNegative falseNegative;
 global path nEpochs x_min data batchsize stochIters c1 c2 WolfeThreshold;
 global vf vdf;
 
@@ -34,13 +34,13 @@ suppressPlot = 1;
 % PLS + optimizer options
 useSLBFGS    = true;
 maxEpochs    = 1000;
-batchsize    = 20;
+batchsize    = 200;
 stochIters   = 50;
 probLSFunc   = @mcsearch;   % can be null ([])
 useSVRG      = true;
-c1           = .01;
-c2           = .99;
-WolfeThreshold=.3;
+c1           = .1;
+c2           = .9;
+WolfeThreshold=.2;
 variance_option=0;   % 0: standard, 1: adaptive, 2: improved
 
 % sythetic noise standard deviations for function value and gradient

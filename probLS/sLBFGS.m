@@ -13,7 +13,8 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
     else 
         useLineSearch = 1;
     end
-    global batchsize data;
+    global batchsize data measureMoves nIncorrectDirs nCorrectDirs;
+    global truePositive falsePositive trueNegative falseNegative nDataPoints;
     b = batchsize;
     d = size(data, 2);
     N = size(data, 1);
@@ -49,7 +50,9 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
     prevF = Inf;
     nCorrectDirs = 0;
     nIncorrectDirs = 0;
-    totNegative = 0;
+    truePositive = 0;
+    falsePositive = 0;
+    trueNegative = 0;
     falseNegative = 0;
 
     % Loop over epochs 
@@ -76,8 +79,6 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
         % Check for convergence, final epoch
         if (norm(mu_k)/max([1 norm(w_k)]) < epsilon)
             disp("Convergence!");
-            disp(nCorrectDirs/(nCorrectDirs+nIncorrectDirs));
-            disp([falseNegative totNegative]);
             batchsize = b;
             return;
         end
@@ -145,28 +146,57 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
                 end
                 x_t = x_t - ls_out.step_size*effGrad;
                 %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' f_t: ' num2str(f_t) ' var_f: ' num2str(var_f) ' fFull: ' num2str(fFull) ' fVar_f: ' num2str(fVar_f)]);
-                disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' nLSEvals: ' num2str(ls_out.nLSEvals) ' stepsize: ' num2str(ls_out.step_size) ' f0: ' num2str(ls_out.f0) ' sigmaf: ' num2str(ls_out.sigmaf) ' df0: ' num2str(ls_out.df0) ' sigmadf: ' num2str(ls_out.sigmadf) ' beta: ' num2str(ls_out.beta)]);
+                %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' nLSEvals: ' num2str(ls_out.nLSEvals) ' stepsize: ' num2str(ls_out.step_size) ' f0: ' num2str(ls_out.f0) ' sigmaf: ' num2str(ls_out.sigmaf) ' df0: ' num2str(ls_out.df0) ' sigmadf: ' num2str(ls_out.sigmadf) ' beta: ' num2str(ls_out.beta)]);
+                if measureMoves
+                    % Check to see if effGrad is a descent direction
+                    batchsize = N;
+                    [fullF,fullGrad,~,~,~,~] = ff((x_t+ls_out.step_size*effGrad)'); %ff((x_t+(ls_out.step_size-eta)*effGrad)');
+                    nDataPoints = nDataPoints - N;
+                    if (dot(-effGrad, fullGrad) < 0) %(fullF < prevF)
+                        % it is, sLBFGS predicted direction correctly
+                        nCorrectDirs = nCorrectDirs + 1;
+                        % did line search figure out that the direction is
+                        % correct?
+                        if (ls_out.negDir)
+                            % No, line search failed
+                            falseNegative = falseNegative + 1;
+                        else
+                            % Yes, it did
+                            truePositive = truePositive + 1;
+                        end
+                    else
+                        % it is not, sLBFGS failed
+                        nIncorrectDirs = nIncorrectDirs + 1;
+                        % did the line search figure out that the direction
+                        % is correct?
+                        if (ls_out.negDir)
+                            % Yes, line search was right
+                            trueNegative = trueNegative + 1;
+                        else
+                            % No, line search failed
+                            falsePositive = falsePositive + 1;
+                        end
+                    end
+                    prevF = fullF;
+                end
             else
                 x_t = x_t - eta*effGrad/divisor;
                 %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' divisor: ' num2str(divisor) ' prod: ' num2str(norm(1/norm(v_t)*effGrad))]);
+                if measureMoves
+                    % Check to see if effGrad is a descent direction
+                    batchsize = N;
+                    [fullF,fullGrad,~,~,~,~] = ff((x_t+eta*effGrad/divisor)');
+                    nDataPoints = nDataPoints - N;
+                    if (dot(-effGrad, fullGrad) < 0) %(fullF < prevF
+                        % it is, sLBFGS predicted direction correctly
+                        nCorrectDirs = nCorrectDirs + 1;
+                    else
+                        % It is not, sLBFGS failed
+                        nIncorrectDirs = nIncorrectDirs + 1;
+                    end
+                    prevF = fullF;
+                end
             end
-            
-                        
-            % Check to see if effGrad is actually a descent direction
-%             batchsize = N;
-%             [fullF,~,~,~,~,~] = ff(x_t');
-%             if (fullF < prevF)
-%                 nCorrectDirs = nCorrectDirs + 1;
-%             else
-%                 nIncorrectDirs = nIncorrectDirs + 1;
-%             end
-%             if (ls_out.negDir) 
-%                 totNegative = totNegative + 1;
-%                 if (fullF < prevF)
-%                     falseNegative = falseNegative + 1;
-%                 end
-%             end
-%             prevF = fullF;
             
             % Check to see if L iterations have passed (triggers hessian update)
             if (mod(t,L) == 0)
