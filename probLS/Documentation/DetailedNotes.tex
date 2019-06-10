@@ -3,11 +3,12 @@
 \usepackage[plain]{algorithm}
 \usepackage{algpseudocode}
 \usepackage{flexisym}
+\usepackage{amsthm}
 
 \begin{document}
 
 \title{sLBFGS+PLS Implementation Notes}
-\author{Chaitanya Rastogi}
+\author{Hammaad Adam, Chaitanya Rastogi and Tomas Rube}
 \maketitle
 
 \section{Notation, etc.}
@@ -16,6 +17,7 @@
 	\item $t$: the current location; position vector is given by $x(t)$
 	\item $y_t$, $y_t'$: noisy function and gradient values of $f$ at $t$
 	\item $\sigma_f$, $\sigma_{f'}$: estimates of noise in function value and gradient
+	\item $d$: the current line search direction
 	\item $\odot$: element-wise operation, i.e. $x^{\odot 2}$ indicates element-wise squaring of the vector $x$, while $a\odot b$ indicates element-wise multiplication of the two vectors
 \end{itemize}
 The sLBFGS used in testing the code here was copied from my original Java code into Matlab. Testing has shown this version is not as efficient as the original Java code, probably due to some minor 0-1 array indexing issue in \texttt{twoLoopRecursion} that makes it slightly unstable. However, I still believe the overall trend of the results holds. 
@@ -45,7 +47,7 @@ In the case of BFGS updates, it is possible that the above definition of $\beta$
 \end{center}
 Fixing this rescaling greatly enhances the stability of the GP: before this fix, running sLBFGS + PLS with a batchsize of 20 and epoch period of 50 steps resulted in $\beta$ values approaching $10^{-9}$.
 \subsection{Rescaling by $\alpha_0$}
-$\alpha_0$ is the initial step size in the line search, in non-dimensional units. In the theoretical discussion of the scaling factor $\beta$, we see that \ref{eq:y_scaling} and \ref{eq:dy_scaling} only admit the norm of the function gradient. Similarly, we see that the paper discusses rescaling the noise estimates for $\sigma_f$ and $\sigma_{f'}$ as follows:
+$\alpha_0$ is the initial step size in the line search, in non-dimensional units. In the theoretical discussion of the scaling factor $\beta$, we see that \eqref{eq:y_scaling} and \eqref{eq:dy_scaling} only admit the norm of the function gradient. Similarly, we see that the paper discusses rescaling the noise estimates for $\sigma_f$ and $\sigma_{f'}$ as follows:
 \begin{gather}
 \label{eq:sy_scaling} \sigma_f = \frac{\sigma_f}{|y'(0)|} \\
 \label{eq:sdy_scaling} \sigma_{f'} = \frac{\sigma_{f'}}{|y'(0)|}
@@ -62,26 +64,80 @@ The original Matlab code follows this convention as well. It is unclear why the 
 \texttt{y = (y - f0)/beta; (in evaluate_function)} \\
 \texttt{y_tt = y*beta + f0; (in make_outs)}
 \end{center}
+\subsection{Step Size Selection}
+In traditional BFGS methods, the quasi-newton nature of these methods generate `properly' scaled search directions that allow the initial step size of the line search, $\alpha_0$, to be set to 1 every iteration. Significantly, this value is independent of the objective function being optimized. In contrast, the original sLBFGS implementation uses a fixed step size $\eta$ that needs to be optimized to suit the objective at hand. In yet another variation, the original PLS approach removes the need to tune the initial step size by setting it to 1, but relies on ad-hoc schemes that track the size of previous steps to change the step size of the upcoming iteration. Thankfully, these updating schemes are unnecessary in the sLBFGS + PLS setting, where $\alpha_0 = \eta$. While an improvement, it is surprising how the sLBFGS + PLS method cannot deal with objective-independent unitary step sizes without running into convergence issues. 
 \section{Noise Estimation}
 Another major theoretical component of the PLS paper is the usage of noisy estimates to do a somewhat deterministic optimization of an objective function. As such, determining the noise level of these estimates forms a critical component of the PLS. However, I believe there is a major approximation made in the paper that can significantly impact the performance of the line search, especially within the context of stochastic variance-reduced gradients (SVRG). 
 
 The original PLS implementation sets the function and gradient noise levels ($\sigma_f$ and $\sigma_{f'}$) at the \emph{start} of the line search, i.e. at $t=0$, and maintains it throughout the search. Surprisingly, faster convergence was observed in the SGD setting when the code was modified to change $\sigma_f$ and $\sigma_{f'}$ to the largest value encountered during the line search. This test highlighted the impact of the approximation in estimating the variance. 
 \subsection{SEM in the Minibatch Setting}
-The problem in estimating the SEM of function and gradient values in a minibatch can be recast into a toy problem:
+The problem in estimating the SEM of function and gradient values in a mini-batch can be recast into a toy problem:
 \begin{quote}
 Let us begin with a set of points $A$, which have mean $\mu_A$, variance $\sigma_A^2$, and SEM $\sigma_A/\sqrt{|A|}$, where $|A|$ is the cardinality of the set $A$. Our goal is to estimate $\mu_A$; however, we only have access to sets $A'$ that are generated by sampling points (without replacement) from $A$ such that $|A'| \leq |A|$. If we can only observe sets $A'$, what is the SEM of the means $\mu_{A'}$ that we observe?
 \end{quote}
-Conceptually, I think understanding of this toy problem is key to understanding the error in the process for estimating the function and gradient SEMs in the current approach. When a minibatch is used to \emph{estimate} function and gradient values, we know the means have some spread (SEM) around the true function and gradient means as computed \emph{exactly} on the entire dataset. As such, in the limit where my minibatch hits the full size of the dataset, there should be \emph{no} variance in the function and gradient means. The current approach employed in the paper and the code uses a naïve algorithm to compute the variance, using Bessel's correction:
+Conceptually, this toy problem is key to understanding the error in the process for estimating the function and gradient SEMs in the current approach. When a mini-batch is used to \emph{estimate} function and gradient values, we know the means have some spread (SEM) around the true function and gradient means as computed \emph{exactly} on the entire dataset. As such, in the limit where my mini-batch hits the full size of the dataset, there should be \emph{no} variance in the function and gradient means. The current approach employed in the paper and the code uses a naïve algorithm to compute the variance, using Bessel's correction:
 \begin{gather}
-\label{eq:sf} \sigma_f^2 = \frac{1}{|A'|}\frac{|A'|}{|A'|-1} \left[\frac{1}{|A'|} \sum_{i\in A'} \ell^2(A_i) - \left(\frac{1}{|A'|} \sum_{i\in A'} \ell(A_i) \right)^2 \right] \\
-\label{eq:sdf} \sigma_{f'}^2 = \frac{1}{|A'|}\frac{|A'|}{|A'|-1} d^{\odot 2} \cdot \left[ \frac{1}{|A'|} \sum_{i \in A'} \nabla \ell(A_i)^{\odot 2} - \left(\frac{1}{|A'|} \sum_{i \in A'} \nabla \ell(A_i) \right)^{\odot 2} \right]
+\label{eq:sf} \sigma_f^2 = \frac{1}{n}\frac{n}{n-1} \left[\frac{1}{n} \sum_{i\in A'} \ell^2(A_i) - \left(\frac{1}{n} \sum_{i\in A'} \ell(A_i) \right)^2 \right] \\
+\label{eq:sdf} \sigma_{f'}^2 = \frac{1}{n}\frac{n}{n-1} d^{\odot 2} \cdot \left[ \frac{1}{n} \sum_{i \in A'} \nabla \ell(A_i)^{\odot 2} - \left(\frac{1}{n} \sum_{i \in A'} \nabla \ell(A_i) \right)^{\odot 2} \right]
 \end{gather}
-
-
-\subsection{Potential Future Directions}
+where $N=|A|$ and $n=|A'|$. Unfortunately, this naïve method computes non-zero estimates of $\sigma_f$ and $\sigma_{f'}$ when $A' = A$. If we have access to the `true' $\sigma_A$ of the whole set (i.e. the intrinsic variance), Tomas proposed the following correction to estimate mini-batch SEM:
+\begin{equation}
+\label{eq:Tomas_correction}
+\text{SEM}_{A'} = \sqrt{\frac{N-n}{Nn} \sigma_A^2},
+\end{equation}
+The derivation is presented below. 
+\begin{proof}
+Consider $N$ random variables $x_i$, where $i\in 1,\ldots,N$ drawn from a distribution with variance $\sigma^2$. The average of these variables is then 
+\[ \mu_N = \frac{1}{N}\sum_i^N x_i \]
+If you can only use the first $n$ variables to estimate the mean, we get 
+\[ \mu_n = \frac{1}{n}\sum_i^n x_i \]
+Let 
+\[\mu_{N-n} = \frac{1}{N-n}\sum_{i=n+1}^N x_i\]
+Then
+\[ \mu_N = \frac{n \mu_n + (N-n)\mu_{N-n}}{N} \]
+We can define the error $e$ in estimating $\mu_N$ using $\mu_n$ as
+\[ e(n|N) = \mu_N-\mu_n = \frac{n\mu_n + (N-n)\mu_{N-n}}{N}-\mu_n = \frac{N-n}{N}(\mu_{N-n}-\mu_n)\]
+The variance of this error is then 
+\begin{align*}
+\text{Var}[e(n|N)] &= \frac{(N-n)^2}{N^2}\left( \text{Var}[\mu_{N-n}] - \text{Var}[\mu_n] \right) \\
+&= \frac{(N-n)^2}{N^2} \left(\frac{1}{N-n} +\frac{1}{n} \right) \sigma^2 \\
+&= \frac{N-n}{Nn}\sigma^2
+\end{align*}
+\end{proof}
+\subsection{Other Variance Measures}
+Tomas suggested an alternative method for measuring the SEM of the gradient: 
+\begin{equation}
+\label{eq:sdf_tomas} \sigma_{f'}^2 = \frac{1}{n}\frac{n}{n-1} \left[ \frac{1}{n} \sum_{i \in A'} \left[d \cdot \nabla \ell(A_i) \right]^{\odot 2} - \left(\frac{1}{n} \sum_{i \in A'} d\cdot\nabla \ell(A_i) \right)^{\odot 2} \right]
+\end{equation}
+Conceptually, this modification captures the per-data point gradient variance in the \emph{direction} of descent rather than the projection of the gradient SEM on the descent direction. When tested in place of the original estimator in a SGD context, the PLS was more efficient. 
 \section{PLS in the SVRG Setting}
+Stochastic Variance Reduced Gradient, or SVRG, is a method used to improve the speed and efficiency of convergence in stochastic optimization methods. Originally designed for use in the SGD context, it was ported to the quasi-newton setting in sLBFGS. SVRG is supposed to reduce the `variance' of the SGD estimates through the usage of a modified update scheme that relies on a gradient $\mu_k$ that is computed on the full-batch once per epoch at some position $x_k$. The SVRG gradient at every iteration $i$ on mini-batch $b$ is then
+\begin{equation}
+\label{eq:svrg}
+\nabla_{\text{SVRG}} f(x_i, b) = \underbrace{\nabla f(x_i, b)}_{\substack{\text{stochastic} \\ \text{estimate}}} - \underbrace{(\nabla f(x_k, b) - \mu_k)}_{\text{batch bias}}
+\end{equation}
+where $\nabla f(x_k, b)$ indicates the gradient of $f$ at $x_k$ as computed on mini-batch $b$. In my understanding, this update estimates the batch-induced bias in stochastic estimates by comparing the difference between the gradient computed on the full dataset and the mini-batch $b$ at $x_k$. This difference represents the bias induced by computing on batch $b$ and can be subtracted from the current estimate of the gradient. In a sense, SVRG updates represent 
 \subsection{Scaling to SVRG Space}
-\subsection{Impact of SVRG Updates}
-\section{Determining a Descent Direction}
+Discuss how SVRG needs to be properly implemented in the 
+\subsection{Variance in the SVRG Context}
+Discuss root 2 inflation, and how we can use variance estimates from the SVRG update to estimate noise. This is more stable (discuss 3 orders of magnitude variation in gradient SD per mini-batch), and also means tomas's estimator, even though it might be more efficient and less biased, will be harder to implement computationally
+
+\begin{figure}[h!]
+\centering
+\subfigure[SVM Function Variance]{\includegraphics[width=.45\linewidth]{svm_func_var_20.pdf}}
+\subfigure[SVM Gradient Variance]{\includegraphics[width=.45\linewidth]{svm_grad_var_20.pdf}}
+\caption{Function and Gradient Variances for the SVM test case with a gradient batch size of 20, a hessian batch size of 200, a hessian update period of 10 iterations, and a full gradient computation (an epoch) every 50 iterations. 11 step moving averages are shown for all tracks except for the full batch function variance track. X-axis shows the number of iterations. The full batch variance values use Tomas's SEM correction term.}
+\end{figure}
+
+\begin{figure}[h!]
+\centering
+\subfigure[SVM Function Variance]{\includegraphics[width=.45\linewidth]{svm_func_var_200.pdf}}
+\subfigure[SVM Gradient Variance]{\includegraphics[width=.45\linewidth]{svm_grad_var_200.pdf}}
+\caption{Function and Gradient Variances for the SVM test case with a gradient batch size of 200, a hessian batch size of 2000, a hessian update period of 10 iterations, and a full gradient computation (an epoch) every 50 iterations. 11 step moving averages are shown for all tracks except for the full batch function variance track. X-axis shows the number of iterations, and the full batch variance values use Tomas's SEM correction term.}
+\end{figure}
+
+\section{Determining the `Suitability' of the Descent Direction}
 \subsection{Metrics for GP Precision and Recall}
+\section{Subsampling True Dataset to Approximate SVRG}
+\section{Alternative Line Search Candidate Methods}
 \end{document}
