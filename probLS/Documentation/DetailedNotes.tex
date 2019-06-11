@@ -4,6 +4,12 @@
 \usepackage{algpseudocode}
 \usepackage{flexisym}
 \usepackage{amsthm}
+\usepackage{listings}
+
+\definecolor{MyDarkGreen}{rgb}{0.0,0.4,0.0}
+\lstset{language=Matlab, 
+basicstyle=\small\ttfamily,
+commentstyle=\usefont{T1}{pcr}{m}{sl}\color{MyDarkGreen}\small}
 
 \begin{document}
 
@@ -111,14 +117,61 @@ Tomas suggested an alternative method for measuring the SEM of the gradient:
 \end{equation}
 Conceptually, this modification captures the per-data point gradient variance in the \emph{direction} of descent rather than the projection of the gradient SEM on the descent direction. When tested in place of the original estimator in a SGD context, the PLS was more efficient. 
 \section{PLS in the SVRG Setting}
-Stochastic Variance Reduced Gradient, or SVRG, is a method used to improve the speed and efficiency of convergence in stochastic optimization methods. Originally designed for use in the SGD context, it was ported to the quasi-newton setting in sLBFGS. SVRG is supposed to reduce the `variance' of the SGD estimates through the usage of a modified update scheme that relies on a gradient $\mu_k$ that is computed on the full-batch once per epoch at some position $x_k$. The SVRG gradient at every iteration $i$ on mini-batch $b$ is then
+Stochastic Variance Reduced Gradient, or SVRG, is a method used to improve the speed and efficiency of convergence in stochastic optimization methods. Originally designed for use in the SGD context, it was ported to the quasi-newton setting in sLBFGS. SVRG is supposed to reduce the `variance' of the SGD estimates through a modified update scheme that relies on a gradient $\mu_k$ that is computed on the entire dataset once per epoch at some position $x_k$. The SVRG gradient at every iteration $i$ on mini-batch $b$ is then
 \begin{equation}
 \label{eq:svrg}
 \nabla_{\text{SVRG}} f(x_i, b) = \underbrace{\nabla f(x_i, b)}_{\substack{\text{stochastic} \\ \text{estimate}}} - \underbrace{(\nabla f(x_k, b) - \mu_k)}_{\text{batch bias}}
 \end{equation}
-where $\nabla f(x_k, b)$ indicates the gradient of $f$ at $x_k$ as computed on mini-batch $b$. In my understanding, this update estimates the batch-induced bias in stochastic estimates by comparing the difference between the gradient computed on the full dataset and the mini-batch $b$ at $x_k$. This difference represents the bias induced by computing on batch $b$ and can be subtracted from the current estimate of the gradient. In a sense, SVRG updates represent 
+where $\nabla f(x_k, b)$ indicates the gradient of $f$ at $x_k$ as computed on mini-batch $b$. In my understanding, this update estimates the batch-induced bias in stochastic estimates by comparing the difference between the gradient computed on the full dataset and the mini-batch $b$ at $x_k$. This difference represents the bias induced by computing on batch $b$ and can be subtracted from the current estimate of the gradient. As a result, the mean function and gradient values as estimated from the mini-batch should be closer to the true values.
 \subsection{Scaling to SVRG Space}
-Discuss how SVRG needs to be properly implemented in the 
+Every sLBFGS update already computes the SVRG gradient estimate $v_t$ every iteration. In order to properly run the line search in SVRG space, the starting function values need to be adjusted as well:
+\begin{lstlisting}
+for k = 0:maxEpoch
+	...
+	% function and gradient on the full dataset
+	[fFull, mu_k] = f(w_k);
+	...
+	% iterations within an epoch
+	for t = 1:m
+		% select batchsize 
+		sidx = randsample(1:N, batchsize);
+		% compute on minibatch
+		[f_xt, grad_xt] = f(x_t, sidx);
+		[f_wk, grad_wk] = f(w_k, sidx);
+		% compute SVRG function and grad
+		f_t = (f_xt + fFull) - f_wk;
+		v_t = (grad_xt + mu_k) - grad_wk;
+		...
+		% compute effective direction
+		if (r < 1)
+			% no hessian updates have occured
+			effGrad = v_t;
+		else
+			effGrad = twoLoopRecursion(v_t);
+		end
+		...
+		% use line search
+		if (r < 1)
+			step_size = ls(x_t, f_t, v_t, ...
+			-effGrad, eta/norm(v_t), ..., 
+			fFull, mu_k, w_k);
+		else
+			step_size = ls(x_t, f_t, v_t, ...
+			-effGrad, eta, fFull, mu_k, ...
+			w_k);
+		end
+\end{lstlisting}
+In addition, \texttt{evaluate_function} needs to be modified:
+\begin{lstlisting}
+% select batchsize
+sidx = randsample(1:N, batchsize);
+% compute on minibatch
+[y_t, dy] = f(x0 + tt*alpha0*search_direction, sidx);
+[y_k, grad_wk] = f(w_k, sidx);
+y = (y_t + fFull) - y_k;
+dy = (dy + mu_k) - grad_wk;
+\end{lstlisting}
+It is critical that the \emph{same} mini-batch is used to compute function and gradient values at $x_t$ and $w_k$. Doing so on different batches ruins the impact of bias reduction. When improperly implemented, the improper SVRG updates cause high-frequency, low-amplitude oscillations around the minimum, preventing convergence.
 \subsection{Variance in the SVRG Context}
 Discuss root 2 inflation, and how we can use variance estimates from the SVRG update to estimate noise. This is more stable (discuss 3 orders of magnitude variation in gradient SD per mini-batch), and also means tomas's estimator, even though it might be more efficient and less biased, will be harder to implement computationally
 
