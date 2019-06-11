@@ -129,10 +129,8 @@ end
 if ~isempty(mu_k) && ~isempty(w_k) && ~isempty(fFull)
     % Use SVRG for gradient moves
     useSVRG = true;
-    varmult = sqrt(2);
 else
     useSVRG = false;
-    varmult = 1;
 end
 
 % -- set up GP ------------------------------------------------------------
@@ -163,16 +161,16 @@ EI       = @(m,s,eta) (eta - m) .* GaussCDF((eta-m)./s) + s .* GaussPDF((eta-m).
 %beta = abs(search_direction'*df0); % scale f and df according to 1/(beta*alpha0)
 beta = norm(df0);
 % -- scaled noise ---------------------------------------------------------
-sigmaf  = varmult*sqrt(var_f0)/beta;
+sigmaf  = sqrt(var_f0)/beta;
 if variance_option > 1
     % Compute improved variance
     g0dot   = zeros(1, size(grad_matrix, 1));
     for currIdx = 1:length(g0dot)
         g0dot(currIdx) = grad_matrix(currIdx,:)*search_direction;
     end
-    sigmadf = varmult*sqrt(1/(batchsize-1)*(1/batchsize*sum(g0dot.^2)-(sum(g0dot)/batchsize)^2))/beta;
+    sigmadf = sqrt(1/(batchsize-1)*(1/batchsize*sum(g0dot.^2)-(sum(g0dot)/batchsize)^2))/beta;
 else
-    sigmadf = varmult*sqrt((search_direction.^2)'*var_df0)/beta;
+    sigmadf = sqrt((search_direction.^2)'*var_df0)/beta;
 end
 
 % -- initiate data storage ------------------------------------------------
@@ -394,10 +392,10 @@ function evaluate_function()
         % Update variance; Take max of observed sigmaf, sigmadf
         sigmaf_test  = sqrt(var_f)/beta;
         if sigmaf_test > sigmaf
-            sigmaf = varmult*sigmaf_test;
+            sigmaf = sigmaf_test;
         end
         if sigmadf_test > sigmadf
-            sigmadf = varmult*sigmadf_test;
+            sigmadf = sigmadf_test;
         end
     end
 end

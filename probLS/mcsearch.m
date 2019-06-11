@@ -121,10 +121,8 @@ end
 if ~isempty(mu_k) && ~isempty(w_k) && ~isempty(fFull)
     % Use SVRG for gradient moves; ensure variance comes from SVRG sample
     useSVRG = true;
-    varmult = sqrt(2);
 else
     useSVRG = false;
-    varmult = 1;
 end
 
 % BEGIN LINE SEARCH
@@ -134,16 +132,16 @@ tt  = 1 ; % initial step size in scaled space
 beta = norm(df0);
 
 % Compute noise for starting point (T=0)?
-sigmaf  = varmult*sqrt(var_f0)/beta;
+sigmaf  = sqrt(var_f0)/beta;
 if variance_option > 1
     % Compute improved variance
     g0dot   = zeros(1, size(grad_matrix, 1));
     for currIdx = 1:length(g0dot)
         g0dot(currIdx) = grad_matrix(currIdx,:)*search_direction;
     end
-    sigmadf = varmult*sqrt(1/(batchsize-1)*(1/batchsize*sum(g0dot.^2)-(sum(g0dot)/batchsize)^2))/beta;
+    sigmadf = sqrt(1/(batchsize-1)*(1/batchsize*sum(g0dot.^2)-(sum(g0dot)/batchsize)^2))/beta;
 else
-    sigmadf = varmult*sqrt((search_direction.^2)'*var_df0)/beta;
+    sigmadf = sqrt((search_direction.^2)'*var_df0)/beta;
 end
 
 % -- initiate data storage ------------------------------------------------
@@ -490,10 +488,10 @@ function evaluate_function()
         % Update variance; Take max of observed sigmaf, sigmadf
         sigmaf_test  = sqrt(var_f)/beta;
         if sigmaf_test > sigmaf
-            sigmaf = varmult*sigmaf_test;
+            sigmaf = sigmaf_test;
         end
         if sigmadf_test > sigmadf
-            sigmadf = varmult*sigmadf_test;
+            sigmadf = sigmadf_test;
         end
     end
 end
@@ -609,6 +607,9 @@ function make_outs(y, dy, var_f, var_df)
     outs.df0 = dY_projected(1);
     outs.beta = beta;
     outs.negDir = false;
+    outs.x_t = x_tt;
+    outs.f_t = y_tt;
+    outs.v_t = dy_tt;
     
     % reset NEXT initial step size to average step size if accepted step
     % size is 100 times smaller or larger than average step size

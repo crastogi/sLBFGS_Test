@@ -21,7 +21,7 @@
 %
 % (C) 2015, Maren Mahsereci (mmahsereci@tue.mpg.de)
 
-clearvars -except totEpochs nSamples nDataPoints totDist q measureMoves totICDirs totCDirs totTP totFP totTN totFN nIncorrectDirs nCorrectDirs truePositive falsePositive trueNegative falseNegative xt_var wk_var tot_var diff_var;
+clearvars -except totEpochs nSamples nDataPoints totDist q measureMoves metrics CDLCFD CDLCFI CDLIFD CDLIFI IDLCFD IDLCFI IDLIFD IDLIFI;
 global path nEpochs x_min data batchsize stochIters c1 c2 WolfeThreshold;
 global vf vdf;
 

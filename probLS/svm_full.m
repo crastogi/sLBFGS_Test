@@ -1,4 +1,4 @@
-function [f, df, vf2, vdf2, var_f, var_df, grad_matrix, temp] = svm_full(x, sampleidx, varargin)
+function [f, df, vf2, vdf2, var_f, var_df, grad_matrix] = svm_full(x, sampleidx, varargin)
     global data;
     global classes;
     global batchsize;
