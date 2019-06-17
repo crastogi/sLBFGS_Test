@@ -238,7 +238,7 @@ public class Array {
 		for (int i = 0; i < a.length; i++) {
 			output += (a[i] - b[i])*(a[i] - b[i]);
 		}
-		return output;
+		return Math.sqrt(output);
 	}
 	
 	public static double[] divide(double[] a, double[] b) {
@@ -353,6 +353,17 @@ public class Array {
 			}
 		}
 		return (output/input.length);
+	}
+	
+	public static double var(double[] input) {
+		double sum = 0, sq = 0;
+		
+		for (int i=0; i<input.length; i++) {
+			sum += input[i];
+			sq  += input[i]*input[i];
+		}
+		
+		return (input.length/(input.length-1)*(sq/input.length - sum*sum/(input.length*input.length)));
 	}
 	
 	//Return the minimum value of the array
@@ -579,6 +590,21 @@ public class Array {
 		
 		for (int i=0; i<input.length; i++) {
 			output[i] = input[i] - value;
+		}
+		return output;
+	}
+	
+	public static double[] matrixVectorMultiply(double[][] m, double[] v) {
+		if (m[0].length!=v.length) {
+			throw new IllegalArgumentException("Matrix and vector dimensions do not agree!");
+		}
+		double[] output = new double[m.length];
+		
+		// Loop over both axes in matrix
+		for (int i=0; i<m.length; i++) {
+			for (int j=0; j<v.length; j++) {
+				output[i] += m[i][j]*v[j];
+			}
 		}
 		return output;
 	}

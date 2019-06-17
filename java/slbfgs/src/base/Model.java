@@ -7,6 +7,7 @@ public abstract class Model {
 	public int nDim = 0, N = 0, evaluatedDataPoints = 0;
 	public String fName = "N/A";
 	public int[] currBatchIdx;
+	public int[] currSuperBatchIdx = null;
 	private MersenneTwisterFast mtfast = new MersenneTwisterFast();
 	
 	public int getNFeatures() {
@@ -25,16 +26,49 @@ public abstract class Model {
 		return new Fit(fName, nDim, seed);
 	}
 	
-	public void sampleBatch(int k) {
+	public void setSuperBatch(int k) {
 		int idx = 0;
-		currBatchIdx = new int[k];
+		currSuperBatchIdx = new int[k];
 		HashSet<Integer> h = new HashSet<Integer>();
 		
 		for (int i=0; i<k; i++) {
 			h.add(mtfast.nextInt(N));
 		}
-		while(h.size()<k-1) {
+		while(h.size()<k) {
 			h.add(mtfast.nextInt(N));
+		}
+		Iterator<Integer> i = h.iterator(); 
+        while (i.hasNext()) {
+        	currSuperBatchIdx[idx] = i.next();
+        	idx++;
+        }
+		return;
+	}
+	
+	public void sampleBatch(int k) {
+		int idx = 0, upperBound = 0;
+		currBatchIdx = new int[k];
+		HashSet<Integer> h = new HashSet<Integer>();	
+		
+		if (currSuperBatchIdx!=null) {
+			upperBound = currSuperBatchIdx.length;
+			if (k>=upperBound) {
+				currBatchIdx = Array.clone(currSuperBatchIdx);
+				return;
+			}
+			for (int i=0; i<k; i++) {
+				h.add(currSuperBatchIdx[mtfast.nextInt(upperBound)]);
+			}
+			while(h.size()<k) {
+				h.add(currSuperBatchIdx[mtfast.nextInt(upperBound)]);
+			}
+		} else {
+			for (int i=0; i<k; i++) {
+				h.add(mtfast.nextInt(N));
+			}
+			while(h.size()<k) {
+				h.add(mtfast.nextInt(N));
+			}
 		}
 		Iterator<Integer> i = h.iterator(); 
         while (i.hasNext()) {

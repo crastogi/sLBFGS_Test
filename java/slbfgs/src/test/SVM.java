@@ -15,7 +15,7 @@ public class SVM extends Model {
 
 	public SVM(double lambda) {						// Load data
 		int maxCols;
-        String csvFile = "./src/featurized_df.csv";
+        String csvFile = "./src/featurized_df_full.csv";
         String line;
         double[] temp;
         String[] split;
@@ -40,7 +40,7 @@ public class SVM extends Model {
             	parsed.add(temp);
             }
         	// Store values in data
-        	N = 10000; 
+        	N = 32560; //10000 
         	data = new double[N][maxCols-1];
         	classes = new double[N];
         	for (int i=0; i<N; i++) {
