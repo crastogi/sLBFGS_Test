@@ -5,6 +5,7 @@
 \usepackage{flexisym}
 \usepackage{amsthm}
 \usepackage{listings}
+\usepackage{qtree}
 
 \definecolor{MyDarkGreen}{rgb}{0.0,0.4,0.0}
 \lstset{language=Matlab, 
@@ -115,7 +116,11 @@ Tomas suggested an alternative method for measuring the SEM of the gradient:
 \begin{equation}
 \label{eq:sdf_tomas} \sigma_{f'}^2 = \frac{1}{n}\frac{n}{n-1} \left[ \frac{1}{n} \sum_{i \in A'} \left[d \cdot \nabla \ell(A_i) \right]^{\odot 2} - \left(\frac{1}{n} \sum_{i \in A'} d\cdot\nabla \ell(A_i) \right)^{\odot 2} \right]
 \end{equation}
-Conceptually, this modification captures the per-data point gradient variance in the \emph{direction} of descent rather than the projection of the gradient SEM on the descent direction. When tested in place of the original estimator in a SGD context, the PLS was more efficient. 
+Conceptually, this modification captures the per-data point gradient variance in the \emph{direction} of descent rather than the projection of the gradient SEM on the descent direction. When tested in place of the original estimator in a SGD context, the PLS was more efficient.
+\section{Condition Number and Null Space}
+Not sure if this will be necessary?
+\subsection{Subsampling True Dataset to Approximate SVRG}
+Does not work!
 \section{PLS in the SVRG Setting}
 Stochastic Variance Reduced Gradient, or SVRG, is a method used to improve the speed and efficiency of convergence in stochastic optimization methods. Originally designed for use in the SGD context, it was ported to the quasi-newton setting in sLBFGS. SVRG is supposed to reduce the `variance' of the SGD estimates through a modified update scheme that relies on a gradient $\mu_k$ that is computed on the entire dataset once per epoch at some position $x_k$. The SVRG gradient at every iteration $i$ on mini-batch $b$ is then
 \begin{equation}
@@ -161,7 +166,7 @@ for k = 0:maxEpoch
 			w_k);
 		end
 \end{lstlisting}
-In addition, \texttt{evaluate_function} needs to be modified:
+In addition, \texttt{evaluate_function} in the probabilistic line search needs to be modified:
 \begin{lstlisting}
 % select batchsize
 sidx = randsample(1:N, batchsize);
@@ -173,24 +178,65 @@ dy = (dy + mu_k) - grad_wk;
 \end{lstlisting}
 It is critical that the \emph{same} mini-batch is used to compute function and gradient values at $x_t$ and $w_k$. Doing so on different batches ruins the impact of bias reduction. When improperly implemented, the improper SVRG updates cause high-frequency, low-amplitude oscillations around the minimum, preventing convergence.
 \subsection{Variance in the SVRG Context}
-Discuss root 2 inflation, and how we can use variance estimates from the SVRG update to estimate noise. This is more stable (discuss 3 orders of magnitude variation in gradient SD per mini-batch), and also means tomas's estimator, even though it might be more efficient and less biased, will be harder to implement computationally
-
-\begin{figure}[h!]
+Just as both the function and gradient values input into the PLS need to be updated to remain in SVRG space, we need to ensure that SVRG variance is properly estimated. To understand how to approach this problem, let us look at the SVRG function update:
+\[ f(x_t)_{\text{SVRG}} = f(x_t, b) - f(x_k, b) + f(x_k, N) \]
+where $f(x_k, N)$ is the function value at $x_k$ computed on the full dataset. Then, the variance of this estimate is
+\begin{equation}
+\label{eq:svrg_var}
+\text{Var}[f(x_t)_{\text{SVRG}}] = \text{Var}[f(x_t,b)] + \text{Var}[f(x_k, b)] - 2\,\text{Cov}(f(x_t),f(x_k))
+\end{equation}
+as the function value computed on the full batch has no variance. Estimating the covariance term is difficult analytically, so we can (conservatively) estimate it with the following methods:
+\begin{itemize}
+	\item \textbf{Scale by $\sqrt{2}$:} $\text{Cov}=0$ and $\text{Var}[f(x_k, b)]=\text{Var}[f(x_t, b)]$
+	\item \textbf{Rescaled Full-Batch Estimate:} $\text{Cov}=0$ and $\text{Var}[f(x_k, b)]=\text{Var}[f(x_t, b)] = (N-n)/N\cdot\text{Var}[f(x_k, N)]$
+	\item \textbf{Full Computational Evaluation:} Evaluate $\text{Var}[f(x_t, b) - f(x_k,b)]$ every iteration
+\end{itemize}
+Depending on the methodology chosen, we can substitute the naïve gradient variance estimator \eqref{eq:sdf} with Tomas's more accurate one \eqref{eq:sdf_tomas}. The estimators shown above were tested in actual sLBFGS runs on the SVM test case for different batch sizes (Figs. \ref{fig:var_20} and \ref{fig:var_200}). In these plots, the `Scale by $\sqrt{2}$' option is not shown as it is a trivial case that would result in a shifted $x_t$ track. Here, we can see that the rescaled full-batch estimate quite accurately captures the variance in the $x_t$ and $w_k$ estimates, especially in the iterations closer to convergence. It should be noted that the displayed $x_t$ and $w_k$ tracks show 11-iteration moving averages - this is to average out fluctuations roughly 3-5 orders of magnitude between successive estimates.
+\begin{figure}[h]
 \centering
 \subfigure[SVM Function Variance]{\includegraphics[width=.45\linewidth]{svm_func_var_20.pdf}}
 \subfigure[SVM Gradient Variance]{\includegraphics[width=.45\linewidth]{svm_grad_var_20.pdf}}
 \caption{Function and Gradient Variances for the SVM test case with a gradient batch size of 20, a hessian batch size of 200, a hessian update period of 10 iterations, and a full gradient computation (an epoch) every 50 iterations. 11 step moving averages are shown for all tracks except for the full batch function variance track. X-axis shows the number of iterations. The full batch variance values use Tomas's SEM correction term.}
+\label{fig:var_20}
 \end{figure}
-
 \begin{figure}[h!]
 \centering
 \subfigure[SVM Function Variance]{\includegraphics[width=.45\linewidth]{svm_func_var_200.pdf}}
 \subfigure[SVM Gradient Variance]{\includegraphics[width=.45\linewidth]{svm_grad_var_200.pdf}}
 \caption{Function and Gradient Variances for the SVM test case with a gradient batch size of 200, a hessian batch size of 2000, a hessian update period of 10 iterations, and a full gradient computation (an epoch) every 50 iterations. 11 step moving averages are shown for all tracks except for the full batch function variance track. X-axis shows the number of iterations, and the full batch variance values use Tomas's SEM correction term.}
+\label{fig:var_200}
 \end{figure}
+Surprisingly, we see that the direct calculation of the SVRG update results in incredibly low variances, especially towards convergence. This is largely due to the fact that the distance between successive sLBFGS iterations drops as the optimizer closes in on a minimum. As such, we should expect the distance between $x_t$ and $w_k$ to decrease over time and result in similar function and gradient estimates at $x_t$ and $w_k$. Therefore, it seems safe to ignore the SVRG track as an artifact. 
+
+In summary, it appears that the rescaled full-batch estimate should be the most robust noise estimator. However, this would make evaluating Tomas's improved estimator computationally intensive. It appears that the reduced bias and improved efficiency would not outweigh the computational costs. Given that a function call can compute the naïve SEM estimators, we can implement this improvement easily:
+\begin{lstlisting}
+% SVRG step
+[fFull, mu_k, fVar_f, fVar_df] = func(w_k);
+....
+% Evaluate line search
+ls_function(..., fVar_f*(N-n)/N, fVar_df*(N-n)/N,...)
+\end{lstlisting}
 
 \section{Determining the `Suitability' of the Descent Direction}
 \subsection{Metrics for GP Precision and Recall}
-\section{Subsampling True Dataset to Approximate SVRG}
+Discuss tree structure.
+
+\Tree[.$d\cdot\nabla f<0$? 
+		[.{Yes. Did PLS \\ correctly identify \\the direction?} 
+			[.{Yes.\\$f_{i+1}<f_i$?} 
+				[.A B ]
+				[.C D ]]
+               		[.{Yes.\\$f_{i+1}<f_i$?} 
+				[.A B ] 
+				[.C D ]]]
+		[.{Yes. Did PLS \\ correctly identify \\the direction?} 
+			[.{Yes.\\$f_{i+1}<f_i$?} 
+				[.A B ]
+				[.C D ]]
+               		[.{Yes.\\$f_{i+1}<f_i$?} 
+				[.A B ] 
+				[.C D ]]]]
+\subsection{`Small Step Size' Selection}
+Discuss how small step size should be increased compared to the base PLS one. sLBFGS gets the direction right most of the time
 \section{Alternative Line Search Candidate Methods}
 \end{document}
