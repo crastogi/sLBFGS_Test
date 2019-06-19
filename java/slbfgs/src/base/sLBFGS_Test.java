@@ -1,7 +1,6 @@
 package base;
 
 import java.util.ArrayList;
-import java.util.Random;
 import Jama.*;
 import test.SVM;
 
@@ -71,7 +70,6 @@ public class sLBFGS_Test extends Minimizer{
 		y = new double[M][d];
 		// Stores the history of all previous steps in the current epoch
 		ArrayList<double[]> x_t_hist = new ArrayList<double[]>();
-		Random generator = new Random();
 		
 		// Deal with a potential seed and initialize
 		if (seed!=null) {
