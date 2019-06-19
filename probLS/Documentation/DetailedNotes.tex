@@ -1,7 +1,7 @@
 \documentclass{article}
 \usepackage{bm, amsmath,graphicx, subfigure, subfig, wrapfig, float, array, color}
 \usepackage[plain]{algorithm}
-\usepackage{algpseudocode}
+\usepackage{algpseudocode, algorithmicx}
 \usepackage{flexisym}
 \usepackage{amsthm}
 \usepackage{listings}
@@ -27,7 +27,7 @@ commentstyle=\usefont{T1}{pcr}{m}{sl}\color{MyDarkGreen}\small}
 	\item $d$: the current line search direction
 	\item $\odot$: element-wise operation, i.e. $x^{\odot 2}$ indicates element-wise squaring of the vector $x$, while $a\odot b$ indicates element-wise multiplication of the two vectors
 \end{itemize}
-The sLBFGS used in testing the code here was copied from my original Java code into Matlab. Testing has shown this version is not as efficient as the original Java code, probably due to some minor 0-1 array indexing issue in \texttt{twoLoopRecursion} that makes it slightly unstable. However, I still believe the overall trend of the results holds. 
+The sLBFGS used in testing the code here was copied from my original Java code into Matlab. Testing has shown this version is not as efficient as the original Java code, probably due to some minor 0-1 array indexing issue in \texttt{twoLoopRecursion} that makes it slightly unstable. However, I still believe the overall trend of the results hold. 
 \section{Scaling Issues}
 A major component of the probabilistic line search (PLS) paper discussed the elimination of hyperparameters. Many of these parameters were used to set the intrinsic scale of the gaussian process (GP) surrogate function on which the line search optimization was taking place. Upon closer inspection, the implementation of some of these scaling parameters was not in line with the theoretical description in the paper and/or did not make sense in the context of sLBFGS. Correcting these scaling parameters was critical to the stability of the line search when used with sLBFGS and are discussed below.
 \subsection{Scale factor $\beta$}
@@ -117,10 +117,6 @@ Tomas suggested an alternative method for measuring the SEM of the gradient:
 \label{eq:sdf_tomas} \sigma_{f'}^2 = \frac{1}{n}\frac{n}{n-1} \left[ \frac{1}{n} \sum_{i \in A'} \left[d \cdot \nabla \ell(A_i) \right]^{\odot 2} - \left(\frac{1}{n} \sum_{i \in A'} d\cdot\nabla \ell(A_i) \right)^{\odot 2} \right]
 \end{equation}
 Conceptually, this modification captures the per-data point gradient variance in the \emph{direction} of descent rather than the projection of the gradient SEM on the descent direction. When tested in place of the original estimator in a SGD context, the PLS was more efficient.
-\section{Condition Number and Null Space}
-Not sure if this will be necessary?
-\subsection{Subsampling True Dataset to Approximate SVRG}
-Does not work!
 \section{PLS in the SVRG Setting}
 Stochastic Variance Reduced Gradient, or SVRG, is a method used to improve the speed and efficiency of convergence in stochastic optimization methods. Originally designed for use in the SGD context, it was ported to the quasi-newton setting in sLBFGS. SVRG is supposed to reduce the `variance' of the SGD estimates through a modified update scheme that relies on a gradient $\mu_k$ that is computed on the entire dataset once per epoch at some position $x_k$. The SVRG gradient at every iteration $i$ on mini-batch $b$ is then
 \begin{equation}
@@ -188,7 +184,7 @@ where $f(x_k, N)$ is the function value at $x_k$ computed on the full dataset. T
 as the function value computed on the full batch has no variance. Estimating the covariance term is difficult analytically, so we can (conservatively) estimate it with the following methods:
 \begin{itemize}
 	\item \textbf{Scale by $\sqrt{2}$:} $\text{Cov}=0$ and $\text{Var}[f(x_k, b)]=\text{Var}[f(x_t, b)]$
-	\item \textbf{Rescaled Full-Batch Estimate:} $\text{Cov}=0$ and $\text{Var}[f(x_k, b)]=\text{Var}[f(x_t, b)] = (N-n)/N\cdot\text{Var}[f(x_k, N)]$
+	\item \textbf{Rescaled Full-Batch Estimate:} \\ $\text{Cov}=0$ and $\text{Var}[f(x_k, b)]=$ $\text{Var}[f(x_t, b)] =$ $(N-n)/N\cdot\text{Var}[f(x_k, N)]$
 	\item \textbf{Full Computational Evaluation:} Evaluate $\text{Var}[f(x_t, b) - f(x_k,b)]$ every iteration
 \end{itemize}
 Depending on the methodology chosen, we can substitute the naïve gradient variance estimator \eqref{eq:sdf} with Tomas's more accurate one \eqref{eq:sdf_tomas}. The estimators shown above were tested in actual sLBFGS runs on the SVM test case for different batch sizes (Figs. \ref{fig:var_20} and \ref{fig:var_200}). In these plots, the `Scale by $\sqrt{2}$' option is not shown as it is a trivial case that would result in a shifted $x_t$ track. Here, we can see that the rescaled full-batch estimate quite accurately captures the variance in the $x_t$ and $w_k$ estimates, especially in the iterations closer to convergence. It should be noted that the displayed $x_t$ and $w_k$ tracks show 11-iteration moving averages - this is to average out fluctuations roughly 3-5 orders of magnitude between successive estimates.
@@ -221,22 +217,96 @@ ls_function(..., fVar_f*(N-n)/N, fVar_df*(N-n)/N,...)
 \subsection{Metrics for GP Precision and Recall}
 Discuss tree structure.
 
+\begin{center}
 \Tree[.$d\cdot\nabla f<0$? 
-		[.{Yes. Did PLS \\ correctly identify \\the direction?} 
+		[.{Yes. Did PLS correctly\\ identify the direction?} 
 			[.{Yes.\\$f_{i+1}<f_i$?} 
-				[.A B ]
-				[.C D ]]
-               		[.{Yes.\\$f_{i+1}<f_i$?} 
-				[.A B ] 
-				[.C D ]]]
-		[.{Yes. Did PLS \\ correctly identify \\the direction?} 
+				[.Yes. \rotatebox{85}{\parbox{3.5cm}{\raggedleft CDCLFD: \\ BFGS+LS Success}} ]
+				[.No. \rotatebox{85}{\parbox{3.5cm}{\raggedleft CDCLFI:\\accidentally overshot}} ]]
+               		[.{No.\\$f_{i+1}<f_i$?} 
+				[.Yes. \rotatebox{85}{\parbox{3cm}{\raggedleft CDILFD: \\partial LS failure}} ] 
+				[.No. \rotatebox{85}{\parbox{3cm}{\raggedleft CDILFI: \\ LS failure}} ]]]
+		[.{No. Did PLS correctly \\ identify the direction?} 
 			[.{Yes.\\$f_{i+1}<f_i$?} 
-				[.A B ]
-				[.C D ]]
-               		[.{Yes.\\$f_{i+1}<f_i$?} 
-				[.A B ] 
-				[.C D ]]]]
+				[.Yes. \rotatebox{85}{\parbox{3cm}{\raggedleft IDCLFD:\\LS rescue}} ]
+				[.No. \rotatebox{85}{\parbox{3cm}{\raggedleft IDCLFI: \\partial LS rescue}} ]]
+               		[.{No.\\$f_{i+1}<f_i$?} 
+				[.Yes. \rotatebox{85}{\parbox{3.5cm}{\raggedleft IDILFD: \\dumb luck: went \\ backward over a hill}} ] 
+				[.No. \rotatebox{85}{\parbox{3cm}{\raggedleft IDILFI: \\total failure}} ]]]]
+\end{center}
 \subsection{`Small Step Size' Selection}
 Discuss how small step size should be increased compared to the base PLS one. sLBFGS gets the direction right most of the time
 \section{Alternative Line Search Candidate Methods}
+ugh
+\section{Condition Number and Null Space}
+We know that both NRLB and ProBound have a large null space - this is the result of using an overparameterized representation for PWMs (for example, we infer $\Delta\Delta$G parameters for \{A, C, G, T\} at every position, while the `true' space has only 3 parameters). After Hammaad's group meeting presentation, Harmen suggested that we look into the effect of a large null space has on gradient-based optimization algorithms. 
+\subsection{Impact of the Null Space}
+For a general likelihood function $\mathcal{L}$, we can identify and remove the null space by computing either the eigendecomposition or SVD of the hessian at any (reasonable) point in the functional space. From experience, SVD was used as it was more stable for matrices with a high condition number (which we have). In addition, we can estimate the hessian with gradients using finite difference methods. Assuming we have this, the following Matlab code can be used to construct a projection matrix $\mathbf{U}$ that allows the projection of position and gradient vectors to and from the full space to the reduced space. 
+\begin{lstlisting}
+[UMat, SMat, ~] = svd(fdHessian);
+U = UMat(:,(diag(SMat)>ev_cutoff));
+\end{lstlisting}
+Equivalent code can be constructed in Java with the JAMA package. Some things to note:
+\begin{itemize}
+\item In some cases (such as the SVM test case used here), the true null vectors can be found via SVD on the data matrix as well, and should, in general, be more stable. In practice, this makes no difference, as long as $\texttt{ev_cutoff}$ and the finite difference step size are appropriately chosen. 
+\item It is \textbf{extremely} important to remove any regularization in $\mathcal{L}$ while identifying the null vectors. Regularization transforms rank-deficient problems into full-rank ones (see discussion below) and can prevent the identification of the null vectors. For simple regularization such as the $L^2$ norm, the following can be used to identify the null vectors:
+\begin{lstlisting}
+U = UMat(:,(diag(SMat)-lambda>ev_cutoff));
+\end{lstlisting}
+where \texttt{lambda} is the strength of the regularization. 
+\end{itemize}
+$\mathbf{U}$ can be used to convert between the full and reduced space as follows: 
+\begin{table}[h!]
+\centering
+\begin{tabular}{c|c}
+\begin{tabular}[c]{@{}c@{}}Full\\ Space\end{tabular} & \begin{tabular}[c]{@{}c@{}}Reduced\\ Space\end{tabular} \\[7pt] \hline 
+$x^{F}$                                              & $\mathbf{U'}\,x^F$                                        \\
+$\mathbf{U}\,x^{R}$                                  & $x^{R}$                                                
+\end{tabular}
+\end{table}
+
+\noindent As the Java sLBFGS implementation is known to perform better than the Matlab version, it was augmented to allow optimization in the reduced space. This implementation was robustly tested with various parameter settings (Table \ref{table:nullspace}) and demonstrated that projecting out the null space had no impact on the optimizers. Interestingly, removing the regularization made it much harder for sLBFGS to converge.
+\begin{table}[h]
+\centering
+\begin{tabular}{c|c|c|c|c|c|c|c}
+\rotatebox{90}{\parbox{1.5cm}{Reduced \\ Space}} & $\lambda$ & \rotatebox{90}{\parbox{1.5cm}{Gradient \\ Batch}} & \rotatebox{90}{\parbox{1.5cm}{Hessian \\Period}} & \rotatebox{90}{\parbox{1.5cm}{Stoch.\\ Iters}} & \begin{tabular}[c]{@{}c@{}}Data\\ Loops\end{tabular} & Epochs          & \rotatebox{90}{Failed} \\ \hline
+F & $ 0.001 $ & $ 20 $ & $ 10 $ & $ 50 $ & $ 36.75 \pm 1.41 $ & $ 31.84 \pm 1.26 $ & \\
+T & $ 0.001 $ & $ 20 $ & $ 10 $ & $ 50 $ & $ 36.85 \pm 1.51 $ & $ 31.93 \pm 1.34 $ & \\
+F & $ 0 $ & $ 20 $ & $ 10 $ & $ 50 $ & N/A & N/A & 100 \\
+T & $ 0 $ & $ 20 $ & $ 10 $ & $ 50 $ & $ 212.10 $ & $ 188 $ & 99 \\
+F & $ 0.001 $ & $ 20 $ & $ 5 $ & $ 10 $ & $ 76.64 \pm 5.50 $ & $ 72.95 \pm 5.30 $ & \\
+T & $ 0.001 $ & $ 20 $ & $ 5 $ & $ 10 $ & $ 75.64 \pm 3.49 $ & $ 71.99 \pm 3.36 $ & \\
+F & $ 0 $ & $ 20 $ & $ 5 $ & $ 10 $ & $ 784.03 \pm 163.39 $ & $ 755.2 \pm 157.58 $ & 95 \\
+T & $ 0 $ & $ 20 $ & $ 5 $ & $ 10 $ & $ 785 $ & $ 756 $ & 99 \\
+F & $ 0.001 $ & $ 200 $ & $ 10 $ & $ 50 $ & $ 45.21 \pm 2.04 $ & $ 19.84 \pm 0.91 $ & \\
+T & $ 0.001 $ & $ 200 $ & $ 10 $ & $ 50 $ & $ 45.08 \pm 1.53 $ & $ 19.78 \pm 0.69 $ & \\
+F & $ 0 $ & $ 200 $ & $ 10 $ & $ 50 $ & $ 466.01 \pm 235.69 $ & $ 208.67 \pm 105.76 $ & 97 \\
+T & $ 0 $ & $ 200 $ & $ 10 $ & $ 50 $ & $ 401.02 \pm 7.88 $ & $ 179.5 \pm 3.54 $ & 98 \\
+F & $ 0.001 $ & $ 200 $ & $ 5 $ & $ 10 $ & $ 93.57 \pm 6.23 $ & $ 67.64 \pm 4.55 $ & \\
+T & $ 0.001 $ & $ 200 $ & $ 5 $ & $ 10 $ & $ 93.51 \pm 6.51 $ & $ 67.6 \pm 4.76 $ & \\
+F & $ 0 $ & $ 200 $ & $ 5 $ & $ 10 $ & $ 413.18 \pm 163.99 $ & $ 301.18 \pm 119.83 $ & 1 \\
+T & $ 0 $ & $ 200 $ & $ 5 $ & $ 10 $ & $ 420.61 \pm 147.49 $ & $ 306.61 \pm 107.77 $ & 1 
+\end{tabular}
+\caption{Impact of the Null Space and Condition Number on Optimizer Efficiency. Impact was assessed by measuring data loops and epochs needed to converge for different hyperparameter settings. Every hyperparameter combination was tested 100 times, with the optimizer starting at the same point every time. The failed column tracks the number of runs that were unable to converge within 1000 epochs. For comparison, L-BFGS took 71 and 144 data loops to converge with and without regularization, respectively. Note that both methods take considerably longer to converge when the regularization parameter $\lambda=0$.}
+\label{table:nullspace}
+\end{table}
+\subsection{Condition Number and SVRG}
+Discuss condition number issue. SVM condition number: $10^3$ with $\lambda$, $\sim 10^4$ without
+\begin{quote}
+There are three issues with SVRG: i) the computation of the full gradient requires a full pass over the dataset. No progress (towards the optimal solution) is made during this time[...]. On large scale problems, where one pass over the data might take several hours, this can yield to wasteful use of resources; ii) the theory requires the algorithm to restart at every snapshot point, resulting in discontinuous behaviour[...] and iii) on strongly convex problems, the snapshot point can only be updated every $\Omega(\kappa)$ iterations[...], where $\kappa= L/\mu$ denotes the condition number[...]. When the condition number is large, this means that the algorithm relies for a long time on ``outdated'' deterministic information.\footnote{Raj, A. \& Stich, S.U. \emph{k}-SVRG: Variance Reduction for Large Scale Optimization. arXiv:1805.00982v2 (2018).}
+\end{quote}
+
+\section{sLBFGS and Beyond...}
+\subsection{Subsampling the True Dataset to Approximate SVRG}
+This does not work! However, going down this path leads to some interesting algorithms (discussed later).
+This is done in the Java sLBFGS implementation, to ensure that the optimal sLBFGS code is used to test performance.
+Two modifications were tested: one where the null space of the SVM was projected out, and another where the SVRG update was performed on a 'super batch' itself.
+
+Running SVRG on the 'super batch' proved to be problematic on highly tractable problems. This was ruled out as a potential method for further testing.
+When testing the super batch concept, two methods were used to generate the super batches and sub-batches; 
+In the first method, super and sub-batches were randomly drawn every time from the whole dataset.
+In the second method, a super batch is sampled from the whole dataset for the SVRG update, but then all gradient/hessian batches are computed from these indices only.
+\subsection{Averaging}
+\subsection{Hessian Updates in the SVRG space}
+\subsection{k-SVRG} 
 \end{document}

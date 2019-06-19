@@ -6,7 +6,7 @@ import Jama.*;
 import test.SVM;
 
 public class sLBFGS_Test extends Minimizer{
-	private boolean isVerbose, randomSelect = true;
+	private boolean isVerbose, randomSelect = false;
 	private int d, N, b, bH, M, m, L, currDepth, maxEpoch;
 	private double eta, delta, fdHVPStepSize = 5E-2, gradientNormBound = 100;
 	private double[] rho;

@@ -5,13 +5,13 @@ import base.*;
 public class SVM_Sweep_Test {
 	
 	public static void main(String[] args) {
-		int nSamples = 10;
+		int nSamples = 100;
 		int memoryDepth = 50;
 		boolean useReducedSpace = false;
-		SVM svm = new SVM(0.001);
+		SVM svm = new SVM(0.001*0);
 		int gradientBatch = 20;
-		int hessianPeriod = 10;
-		int stochIters = 50;
+		int hessianPeriod = 5;
+		int stochIters = 10;
 		int hessianBatch = 10*gradientBatch;
 		double stepSize = .2;
 		double epsilon = 1E-5;
@@ -24,7 +24,7 @@ public class SVM_Sweep_Test {
 		// Minimize with LBFGS to find true minimum
 		min = new LBFGS(svm, 200, 1E-6, 1000, true, true);
 		try {
-			fit = min.doMinimize(null, null);
+			fit = min.doMinimize(new double[svm.nDim], null);
 		}	catch (Exception e) {
 			e.printStackTrace();
 		}
