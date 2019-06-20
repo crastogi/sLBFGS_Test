@@ -1,0 +1,59 @@
+nthreads			= 6					//	Number of threads
+isverbose			= true				//	Show step-by-step minimizer output
+lbfgsmem			= 200				//	Number of steps to adjust by
+lbfgsmaxiters		= 2500				//	Maximum number of steps to take
+lbfgsconvergence	= 5E-6				//	Convergence criteria 
+.
+//**************
+//	INPUT DATA:
+//**************
+dataDir				= /Users/chaitanya/Documents/Research/SELEX/MultinomialPaper/ModelComparisons/DeepBind/AUROC/HT-SELEX Data/
+experimentName		= RFX5_TGGAGC30NGAT_AI
+l					= 30
+lflank				= ATCTGGAGC
+rflank				= GATATCGTA
+
+//**************************
+//REGRESSION CONFIGURATION:
+//**************************
+fitR0				= true
+r0TestKs			= 2
+r0k					= 2
+round				= 2
+growMotif			= false
+maxK				= 13
+useFlank			= true
+flankLength			= 0,1		//	Flank lengths to test
+useDinuc			= false				//�	Does the model use dinuc features?	
+r1TestKs			= 8,9,10,11,12,13,14,15	//	K-mer lengths to test
+simpleSymmetry		= false
+nucSymmetry			= null				//	Nucleotide symmetry string
+dinucSymmetry		= null				//	Dinucleotide symmetry string
+testShifts			= true				//	Reseed with shifted motifs
+nShifts				= 1 				//	Number of shifts left/right to test
+crossValidate		= false				//	Cross validate?
+testRatio			= .5			//	Fraction of data to be held out	
+nFolds				= 10				//	Number of cross-validation sets
+lambda				= 1E-6
+
+multiMode			= true
+uniformK			= true
+startKs				= 12, 12
+maxKs				= 12, 12
+nModes				= 2
+useSymmetry			= false, false
+
+useSeed				= false
+nucSeed				= null
+nsbSeed				= null
+
+//********************
+//OUTPUT INFORMATION:
+//********************
+outputDir			= /Users/chaitanya/Documents/GitWorkspaces/slbfgs/java/output/
+printPSAM			= true				//	Print PSAM in output files
+printSeeds			= false				//	Print Seeds in output files
+printRaw			= false				//	Print a raw line of output
+storeHessian		= true				//	Compute and store the hessian
+errorbars			= true				//	Compute and store error bars
+//trajectoryFileName	= HT_SELEX_Max-traj	//	Print solution trajectory to file
