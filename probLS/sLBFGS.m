@@ -14,7 +14,9 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
         useLineSearch = 1;
     end
     global batchsize data measureMoves nDataPoints CDLCFD CDLCFI CDLIFD; 
-    global CDLIFI IDLCFD IDLCFI IDLIFD IDLIFI;
+    global CDLIFI IDLCFD IDLCFI IDLIFD IDLIFI useReducedSpace U;
+    clear useReducedSpace U;
+    useReducedSpace = false;
     b = batchsize;
     d = size(data, 2);
     N = size(data, 1);
@@ -30,6 +32,44 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
     % Number of currently computed Hessian correction pairs
     r = 0;
     currDepth = 0;
+    
+    % USE REDUCED SPACE
+    if (useReducedSpace)
+        % Compute SVD. Begin by computing fd Hessian on the full dataset.
+        batchsize = N;
+        fdHessian = zeros(d, d);
+        fwdDiff = fdHessian;
+        revDiff = fdHessian;
+        
+        start = x0*0;        
+        for currIdx = 1:d
+            currPos = start;
+            % eval fwd position
+            currPos(currIdx) = currPos(currIdx) + fdHVPStepSize;
+            [~, df] = svm_full(currPos);
+            fwdDiff(currIdx,:) = df';
+            % eval rev position
+            currPos(currIdx) = currPos(currIdx) - 2*fdHVPStepSize;
+            [~, df] = svm_full(currPos);
+            revDiff(currIdx,:) = df';
+        end
+        
+        % compute symmetrized FDs
+        for ii = 1:107
+            for jj = 1:107
+                 fdHessian(ii,jj) = (fwdDiff(ii,jj)-revDiff(ii,jj))/(4*fdHVPStepSize) + ...
+                    (fwdDiff(jj,ii)-revDiff(jj,ii))/(4*fdHVPStepSize);
+            end
+        end
+        [UMat, SMat, ~] = svd(fdHessian);
+        U = UMat(:,((diag(SMat)-.001)>1E-10));
+        % Use true dimensionality
+        d = size(U, 2);
+        % Transform x0
+        x0 = U'*x0;
+        batchsize = b;
+    end
+    
     % Average of path travelled in the current and previous inverse hessian updates
     u_r = zeros(1, d);
     u_r_prev = zeros(1, d);
@@ -60,11 +100,21 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
     for k = 0:maxEpoch
         % Compute full gradient for variance reduction
         batchsize = N;
-        [fFull, mu_k, ~, ~, fVar_f, fVar_df] = ff(w_k');
+        if (useReducedSpace)
+            [fFull, mu_k, ~, ~, fVar_f, fVar_df] = ff(U*w_k');
+            mu_k = U'*mu_k;
+            fVar_df = U'*fVar_df;
+        else
+            [fFull, mu_k, ~, ~, fVar_f, fVar_df] = ff(w_k');
+        end
         mu_k = mu_k';
         var_scale = (N-b)/b;
         
-        path = [path, w_k'];
+        if (useReducedSpace)
+            path = [path, U*w_k'];
+        else
+            path = [path, w_k'];
+        end
         function_values = [function_values, fFull];
         grad_norm = [grad_norm, norm(mu_k)]; 
         
@@ -96,8 +146,17 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
             batchsize = b;
             sidx = randsample(1:(size(data,1)), batchsize);
             % Next, compute the reduced variance function and gradient
-            [f_xt,grad_f_xt,~,~,~,~] = ff(x_t', sidx);
-            [f_wk,grad_f_wk,~,~,~,~] = ff(w_k', sidx);
+            if (useReducedSpace)
+                [f_xt,grad_f_xt] = ff(U*x_t', sidx);
+                f_xt = U'*f_xt;
+                grad_f_xt = U'*grad_f_xt;
+                [f_wk,grad_f_wk] = ff(U*w_k', sidx);
+                f_wk = U'*f_wk;
+                grad_f_wk = U'*grad_f_wk;
+            else
+                [f_xt,grad_f_xt] = ff(x_t', sidx);
+                [f_wk,grad_f_wk] = ff(w_k', sidx);
+            end
             f_t = (f_xt + fFull) - f_wk;
             v_t = (grad_f_xt' + mu_k) - grad_f_wk';
             
@@ -147,7 +206,7 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
                 end
                 x_t = x_t - ls_out.step_size*effGrad;
                 %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' f_t: ' num2str(f_t) ' var_f: ' num2str(var_f) ' fFull: ' num2str(fFull) ' fVar_f: ' num2str(fVar_f)]);
-                %   disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' nLSEvals: ' num2str(ls_out.nLSEvals) ' stepsize: ' num2str(ls_out.step_size) ' f0: ' num2str(ls_out.f0) ' sigmaf: ' num2str(ls_out.sigmaf) ' df0: ' num2str(ls_out.df0) ' sigmadf: ' num2str(ls_out.sigmadf) ' beta: ' num2str(ls_out.beta)]);
+                disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' nLSEvals: ' num2str(ls_out.nLSEvals) ' stepsize: ' num2str(ls_out.step_size) ' f0: ' num2str(ls_out.f0) ' sigmaf: ' num2str(ls_out.sigmaf) ' df0: ' num2str(ls_out.df0) ' sigmadf: ' num2str(ls_out.sigmadf) ' beta: ' num2str(ls_out.beta)]);
                 if measureMoves
                     batchsize = N;
                     [~,fullGrad] = ff((x_t+ls_out.step_size*effGrad)');
@@ -203,11 +262,16 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
                 end
             else
                 x_t = x_t - eta*effGrad/divisor;
-                %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' divisor: ' num2str(divisor) ' prod: ' num2str(norm(1/norm(v_t)*effGrad))]);
                 if measureMoves
                     batchsize = N;
-                    [~,fullGrad] = ff((x_t+ls_out.step_size*effGrad)');
-                    [fullF,~,~] = svm(x_t);
+                    if (useReducedSpace)
+                        [~,fullGrad] = ff(U*(x_t+eta*effGrad/divisor)');
+                        [fullF,~,~] = svm((U*x_t')');
+                        fullGrad = U'*fullGrad;
+                    else
+                        [~,fullGrad] = ff((x_t+eta*effGrad/divisor)');
+                        [fullF,~,~] = svm(x_t);
+                    end
                     nDataPoints = nDataPoints - N;
                     % Check to see if effGrad is a descent direction
                     if (dot(-effGrad, fullGrad) < 0)
@@ -233,6 +297,7 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
                     end
                     prevF = fullF;
                 end
+                %disp(['k: ' num2str(k) ' t: ' num2str(t) ' r: ' num2str(r) '  norm(effGrad): ' num2str(norm(effGrad)) ' divisor: ' num2str(divisor) ' prod: ' num2str(norm(1/norm(v_t)*effGrad))]);
             end
             
             % Check to see if L iterations have passed (triggers hessian update)
@@ -248,8 +313,15 @@ function [path, function_values, grad_norm] = sLBFGS(ff, x0, ...
                 % Compute s_r update
                 s_r = u_r - u_r_prev;
                 % Compute y_r estimate using HVP
-                [~, grad_up] = ff((u_r + fdHVPStepSize*s_r)', sidx);
-                [~, grad_dn] = ff((u_r - fdHVPStepSize*s_r)', sidx);
+                if (useReducedSpace)
+                    [~, grad_up] = ff(U*(u_r + fdHVPStepSize*s_r)', sidx);
+                    [~, grad_dn] = ff(U*(u_r - fdHVPStepSize*s_r)', sidx);
+                    grad_up = U'*grad_up;
+                    grad_dn = U'*grad_dn;
+                else
+                    [~, grad_up] = ff((u_r + fdHVPStepSize*s_r)', sidx);
+                    [~, grad_dn] = ff((u_r - fdHVPStepSize*s_r)', sidx);
+                end
                 y_r = (grad_up'-grad_dn')/(2*fdHVPStepSize);
                 % Store latest values of s_r and y_r
                 add(s_r, y_r);

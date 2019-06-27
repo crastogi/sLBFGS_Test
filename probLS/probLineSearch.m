@@ -342,6 +342,25 @@ make_outs(y, dy, var_f, var_df);
 makePlot();
 
 % *************************************************************************
+function gp_wolfe_diag()
+	nSteps = range(T)*100;
+    x_axis = linspace(min(T), max(T), range(T)*100);
+    f_outs = zeros(1,nSteps);
+    w1_vals= f_outs;
+    g_outs = f_outs;
+    for curr_idx = 1:nSteps 
+        f_outs(curr_idx) = m(x_axis(curr_idx));
+        w1_vals(curr_idx) = m(0)+x_axis(curr_idx)*c1*d1m(0);
+        g_outs(curr_idx) = d1m(x_axis(curr_idx));
+    end
+    figure;
+    yyaxis left; plot(x_axis, f_outs); hold on; plot(x_axis, w1_vals); ylabel('GP Function Value');
+    yyaxis right; plot(x_axis, g_outs); ylabel('GP Gradient Value');
+    hold on; 
+    line([min(x_axis) max(x_axis)], [c2*d1m(0) c2*d1m(0)], 'LineStyle', '--'); 
+    line([min(x_axis) max(x_axis)], [-c2*d1m(0) -c2*d1m(0)], 'LineStyle', '--');
+end
+
 function evaluate_function()
 
     outs.counter = outs.counter + 1;

@@ -6,17 +6,17 @@
 % eta: step size
 % Phi: tracks selected indices
 % aBar_m: 'overall' gradient
-% -------NOTE: Works pretty well??
 k = 4;
+bs = 10;
 M = 1000;
-eta = .05;
+eta = .5;
 epsilon = 1E-5;
 global nDataPoints;
 nDataPoints = 0;
 
 N   = size(data,1);
 d   = size(data,2);
-l   = ceil(N/k);
+l   = ceil(N/(k*bs));
 x0  = flip(x_min{1}')*5; %zeros(1,d);
 S_l = l;                                    % Line 3 
 % Need an size N array to store idx of locations. Initialize to 1
@@ -30,19 +30,31 @@ x_t = x0;
 % Outer loop
 for m = 0:(M-1)                             % Line 5
     ind = randperm(N);                      % Line 6
+    bs_ind = randperm(N);
     for j = 0:(k-1)                         % Line 7
-%        Phi = [];                           % Line 8
+        % Use randomized indices drawn EVENLY from the various 'bindings'.
+        % Define the sampling distribution first
+        A = tabulate(theta_m_binding);
+        sampDist = A(:,2)/N;
         x_t_pos = zeros(l,d);
         for t = 0:(l-1)                     % Line 9
             x_t_pos(t+1,:) = x_t;
-            i_t = randi(N);                 % Line 10
+            %i_t = bs_ind((j*l*bs+t*bs+1):(j*l*bs+(t+1)*bs));      % Line 10
+            currGroup = randsample(A(:,1),1,true,sampDist);
+            i_t = randsample(find(theta_m_binding==currGroup), bs);
             % Line 11
-            [~, a_it] = func(theta_m(theta_m_binding(i_t),:)', i_t);
+            sub_bindings = theta_m_binding(i_t);
+            a_it = 0;
+            for curr_theta = unique(sub_bindings)
+                [~, sg] = func(theta_m(curr_theta,:)', i_t(sub_bindings==curr_theta));
+                a_it = a_it + sum(sub_bindings==curr_theta)*sg;
+            end
+            a_it = a_it/bs;
             [~, f_it] = func(x_t', i_t);
             g_it = f_it' - a_it' + aBar_m';
             x_t = x_t - eta*g_it;           % Line 12
         end
-        Phi = ind((j*l+1):(j*l+l));         % Line 13
+        Phi = ind((j*l*bs+1):(j*l*bs+l*bs));         % Line 13
         xBar = sum(x_t_pos, 1)/S_l;         % Line 12
         % New theta_i: Line 17; start by setting theta_m_binding
         theta_m1_binding = theta_m_binding;

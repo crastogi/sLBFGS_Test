@@ -53,18 +53,15 @@ function [path, function_values, grad_norm] = sLBFGS_k2SVRG(ff, x0, ...
         end
         
         ind = randperm(N);                      % Line 6
-        bs_ind = randperm(N);
         for j = 0:(k-1)                         % Line 7
+            A = tabulate(theta_m_binding);
+            sampDist = A(:,2)/N;
             x_t_pos = zeros(l,d);
             for t = 0:(l-1)                     % Line 9
                 x_t_pos(t+1,:) = x_t;
-                %i_t = randi(N);                 % Line 10
-                %i_t = randsample(1:N, bs);      % Line 10
-                i_t = bs_ind((j*l*bs+t*bs+1):(j*l*bs+(t+1)*bs));
+                currGroup = randsample(A(:,1),1,true,sampDist);
+                i_t = randsample(find(theta_m_binding==currGroup), bs);
                 % Line 11
-%                 [~, a_it] = ff(theta_m(theta_m_binding(i_t),:)', i_t);
-%                 [~, f_it] = ff(x_t', i_t);
-%                 g_it = f_it' - a_it' + aBar_m';
                 sub_bindings = theta_m_binding(i_t);
                 a_it = 0;
                 for curr_theta = unique(sub_bindings)

@@ -6,10 +6,10 @@
 % eta: step size
 % Phi: tracks selected indices
 % aBar_m: 'overall' gradient
-k = 5;
-bs = 25;
+k = 4;
+bs = 10;
 M = 1000;
-eta = .66;
+eta = .5;
 epsilon = 1E-5;
 global nDataPoints;
 nDataPoints = 0;

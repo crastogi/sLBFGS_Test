@@ -9,7 +9,7 @@
 k = 5;
 bs = 25;
 M = 1000;
-eta = .5;
+eta = .25;
 epsilon = 1E-5;
 global nDataPoints
 nDataPoints = 0;

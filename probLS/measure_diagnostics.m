@@ -3,8 +3,8 @@ clear all
 global nDataPoints path nEpochs x_min data batchsize stochIters measureMoves;
 global CDLCFD CDLCFI CDLIFD CDLIFI IDLCFD IDLCFI IDLIFD IDLIFI;
 % Set parameters
-nSamples = 10;
-measureMoves = true;
+nSamples = 100;
+measureMoves = false;
 
 
 totEpochs = zeros(1, nSamples);

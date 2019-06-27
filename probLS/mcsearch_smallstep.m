@@ -1,7 +1,7 @@
 % Incorporates mcsearch with the superior gradient variance estimator and
 % the adaptive noise concept
 function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
-        mcsearch(func, x0, f0, df0, search_direction, ...
+        mcsearch_smallstep(func, x0, f0, df0, search_direction, ...
         alpha0, verbosity, outs, paras, var_f0, var_df0, variance_option,...
         grad_matrix, fFull, mu_k, w_k)
 % probLineSearch.m -- A probabilistic line search algorithm for nonlinear
@@ -67,7 +67,7 @@ function [outs, alpha0_out, y_tt, dy_tt, x_tt, var_f_tt, var_df_tt] = ...
 % SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 % Declare global variables
-global batchsize data c1 c2 WolfeThreshold useReducedSpace U;
+global batchsize data c1 c2 WolfeThreshold;
 % These global variables are for mcstep/mcsearch
 global isBracketed alphaMin alphaMax alphaU fU gU alphaL fL gL;
 % -- setup fixed parameters -----------------------------------------------
@@ -156,6 +156,7 @@ N            = 1;
 
 % Update GP at starting point
 updateGP();
+step_back = false;
 
 % Loop until budget is consumed 
 while true
@@ -195,17 +196,34 @@ while true
     % not, it means the GP believes the objective function is increasing,
     % and the gradient direction is NOT a descent direction. Take a really
     % small step and terminate.
-     if d1m(0) > 0
-        if verbosity > 0
-            disp(['GP detects that the current direction is not a descent direction; taking a small step and terminating. Number of line search iterations: ' num2str(N) '; T string: ' num2str(T')]);
-            %gp_wolfe_diag();
+    if d1m(0) > 0
+        % Measure true probability of gradient being positive
+        pos_grad_prob = normcdf(0, d1m(0), sqrt(dVd(0)), 'upper');
+        if (pos_grad_prob > .8)
+           % Pretty confident that direction is an ascent direction.  
+           if verbosity > 0
+               disp('GP detects that the current direction is an ascent direction, taking a small step.');
+           end
+           % Evaluate function at small step size
+           tt = smallStepSize;
+           evaluate_function();
+           make_outs(y, dy, var_f, var_df);
+           outs.negDir = true;
+           return;
+        elseif (pos_grad_prob > .5 && ~step_back)
+            % Unsure of direction being an ascent direction. Step backwards
+            % and test again
+            tt = -1;
+            step_back = true;
+            continue;
+        else
+            % Unsure of direction being an ascent direction. Rely on BFGS
+            tt = 1;
+            dy = dY(:, T == tt); y = Y(T == tt); var_f = Sigmaf(T == tt); var_df = Sigmadf(:, T==tt);    
+            make_outs(y, dy, var_f, var_df);
+            outs.negDir = true;
+            return; 
         end
-        % Evaluate function at small step size
-        tt = smallStepSize;
-        evaluate_function();
-        make_outs(y, dy, var_f, var_df);
-        outs.negDir = true;
-        return;
     end
     
     % The following can have two alternatives: Accept point only if it
@@ -249,6 +267,16 @@ while true
         end
     end
     
+    % Compute alternative acceptance criteria/see if old points satsify WC?
+    % We will ignore this for now...
+	% -- check this point as well for acceptance --------------------------
+%     if abs(dmin) < 1e-5 && Vd(tmin) < 1e-4 % nearly deterministic
+%         tt = tmin; dy = dY(:, minj); y = Y(minj); var_f = Sigmaf(minj); var_df = Sigmadf(:, minj);        
+%         disp('found a point with almost zero gradient. Stopping, although Wolfe conditions not guaranteed.')
+%         make_outs(y, dy, var_f, var_df);
+%         return;
+%     end
+    
     % Check to see if the number of line search steps has been exceeded
     if N >= maxFuncEvals+1
         break;
@@ -256,6 +284,8 @@ while true
     
     % None of the currently evaluated points are acceptable. Compute new
     % test point using mcsearch.
+    % (todo) Need to figure out the best way to initialize alpha for
+    % mcsearch.
     try 
         tt = mcsearch(max(T));
         % Check to see if tt has already been tested (occurs when an
@@ -431,17 +461,8 @@ function evaluate_function()
     outs.counter = outs.counter + 1;
     if useSVRG
         sidx = randsample(1:(size(data,1)), batchsize);
-        if (useReducedSpace)
-            [y_t, dy] = func(U*(x0 + tt*alpha0*search_direction), sidx);
-            y_t = U'*y_t;
-            dy = U'*dy;
-            [y_k,grad_f_wk,~,~,~,~] = func(U*w_k, sidx);
-            y_k = U'*y_k;
-            grad_f_wk = U'*grad_f_wk;
-        else
-            [y_t, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction, sidx);
-            [y_k,grad_f_wk,~,~,~,~] = func(w_k, sidx);
-        end
+        [y_t, dy, var_f, var_df,~,~,grad_matrixT] = func(x0 + tt*alpha0*search_direction, sidx);
+        [y_k,grad_f_wk,~,~,~,~] = func(w_k, sidx);
         dy = (dy + mu_k) - grad_f_wk;
         y = (y_t + fFull) - y_k;
     else
