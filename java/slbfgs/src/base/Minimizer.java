@@ -1,9 +1,11 @@
 package base;
 
+import java.util.ArrayList;
 import java.util.Formatter;
 
 public class Minimizer {
 	protected double epsilon, randomSeedScale = .05;
+	protected double[] xStar = null;
 	protected Model model;
 	
 	public Fit doMinimize(double[] seed, String trajectoryFile) 
@@ -19,6 +21,15 @@ public class Minimizer {
 	protected Model.CompactGradientOutput stochasticEvaluate(double[] input) throws Exception {
 		model.setParams(input);
 		return model.stochasticEvaluate();
+	}
+	
+	protected Model.CompactGradientOutput stochasticEvaluate(double[] input, ArrayList<Integer> idx) throws Exception {
+		model.setParams(input);
+		return model.stochasticEvaluate(idx);
+	}
+	
+	public void setXStar(double[] input) {
+		xStar = Array.clone(input);
 	}
 	
 	protected void printStep(int iterations, int calls, double likelihood, 

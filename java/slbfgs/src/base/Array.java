@@ -377,6 +377,17 @@ public class Array {
 		return output;
 	}
 	
+	//Return the minimum value of the array
+	public static int min(int[] input) {
+		int output = input[0];
+		for (int i=1; i<input.length; i++) {
+			if (input[i] < output) {
+				output = input[i];
+			}
+		}
+		return output;
+	}
+	
 	public static double[] normalize(double[] input) {
 		double sum		= 0;
 		double[] output = new double[input.length];

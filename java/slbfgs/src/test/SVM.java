@@ -15,7 +15,7 @@ public class SVM extends Model {
 
 	public SVM(double lambda) {						// Load data
 		int maxCols;
-        String csvFile = "./src/featurized_df_full.csv";
+        String csvFile = "./src/featurized_df.csv";
         String line;
         double[] temp;
         String[] split;
@@ -40,7 +40,7 @@ public class SVM extends Model {
             	parsed.add(temp);
             }
         	// Store values in data
-        	N = 32560; //10000 
+        	N = 10000; //32560; //10000 
         	data = new double[N][maxCols-1];
         	classes = new double[N];
         	for (int i=0; i<N; i++) {
@@ -106,6 +106,30 @@ public class SVM extends Model {
 		gradient = Array.scalarMultiply(gradient, 1/((double) currBatchIdx.length));
 		gradient = Array.addScalarMultiply(gradient, lambda, theta);
 		evaluatedDataPoints += currBatchIdx.length;
+		return (new CompactGradientOutput(likelihood, gradient));
+	}
+	
+	public CompactGradientOutput stochasticEvaluate(ArrayList<Integer> idx) {
+		double alpha, y;
+		double likelihood = 0, temp;
+		double x[];
+		double gradient[] = new double[nDim];
+		
+		for (int i=0; i<idx.size(); i++) {
+			x = data[idx.get(i)];
+			y = classes[idx.get(i)];
+			alpha = Array.dotProduct(x, theta);
+			temp = Math.max(0.0, 1 - y*alpha);
+			likelihood += temp*temp;
+			if (y*alpha < 1.0) {
+				gradient = Array.addScalarMultiply(gradient, -1, Array.scalarMultiply(data[idx.get(i)], y*(1 - y*alpha)));
+			}
+		}
+		likelihood /= 2*idx.size();						// Normalize by the number of data points
+		likelihood += lambda*Array.dotProduct(theta, theta)/2;		// Add regularization
+		gradient = Array.scalarMultiply(gradient, 1/((double) idx.size()));
+		gradient = Array.addScalarMultiply(gradient, lambda, theta);
+		evaluatedDataPoints += idx.size();
 		return (new CompactGradientOutput(likelihood, gradient));
 	}
 	

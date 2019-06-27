@@ -1,5 +1,7 @@
 package test;
 
+import java.util.ArrayList;
+
 import base.Array;
 import base.Model;
 
@@ -53,6 +55,10 @@ public class MinimizerTestFunctions extends Model {
 	}
 	
 	public CompactGradientOutput stochasticEvaluate() throws Exception {
+		return evaluate();
+	}
+	
+	public CompactGradientOutput stochasticEvaluate(ArrayList<Integer> idx) throws Exception {
 		return evaluate();
 	}
 	

@@ -1,5 +1,6 @@
 package base;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 
@@ -21,6 +22,8 @@ public abstract class Model {
 	public abstract CompactGradientOutput evaluate() throws Exception;
 		
 	public abstract CompactGradientOutput stochasticEvaluate() throws Exception;
+	
+	public abstract CompactGradientOutput stochasticEvaluate(ArrayList<Integer> idx) throws Exception;
 	
 	public Fit generateFit(double[] seed) {
 		return new Fit(fName, nDim, seed);
