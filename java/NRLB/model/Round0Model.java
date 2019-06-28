@@ -1,5 +1,7 @@
 package model;
 
+import java.util.ArrayList;
+
 import base.*;
 
 public class Round0Model extends Model{
@@ -195,6 +197,11 @@ public class Round0Model extends Model{
 	}
 	
 	// Override stochasticEvaluate
+	public CompactGradientOutput stochasticEvaluate(ArrayList<Integer> idx) 
+			throws Exception {
+		return gradientEval();
+	}
+	
 	public CompactGradientOutput stochasticEvaluate() throws Exception {
 		return gradientEval();
 	}

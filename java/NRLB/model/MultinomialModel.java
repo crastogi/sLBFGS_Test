@@ -16,6 +16,7 @@ import Jama.Matrix;
 import Jama.QRDecomposition;
 import dynamicprogramming.*;
 import base.*;
+import base.Model.CompactGradientOutput;
 
 public class MultinomialModel extends Model{
 	private boolean isDinuc, isShape, isNSBinding, suppressZ, isMemSafe;
@@ -460,6 +461,7 @@ public class MultinomialModel extends Model{
 			output -= currentThread.get();
 		}
 		reverseBetas();			//Return to the original state
+		evaluatedDataPoints += nCount;
 		return output + lambda*Math.pow(Array.norm(getPositionVector()),2);
 	}
 
@@ -482,6 +484,21 @@ public class MultinomialModel extends Model{
 				currIdx++;
 			}
 		}
+	}
+	
+	//TODO
+	//TODO
+	public CompactGradientOutput stochasticEvaluate(ArrayList<Integer> idx) 
+			throws Exception {
+		// Just use stochasticEvaluate but reset the indices
+		currBatchSize	= idx.size();
+		currBatchIdx	= new int[currBatchSize];
+		
+		for (int i=0; i<currBatchSize; i++) {
+			currBatchIdx[i] = idx.get(i);
+		}
+		
+		return stochasticEvaluate();
 	}
 	
 	public CompactGradientOutput stochasticEvaluate() throws Exception {
@@ -521,6 +538,7 @@ public class MultinomialModel extends Model{
 		if (isDinuc)	dinucGradients = Array.addScalarMultiply(Array.scalarMultiply(dinucGradients, 1.0/((double) currBatchSize)), 2*lambda, dinucBetas);
 		if (isShape)	shapeGradients = Array.addScalarMultiply(Array.scalarMultiply(shapeGradients, 1.0/((double) currBatchSize)), 2*lambda, shapeBetas);
 		
+		evaluatedDataPoints += currBatchSize;
 		return (new CompactGradientOutput(functionValue, toVector(isNSBinding, 
 				nsBindingGradient, nucGradients, dinucGradients, shapeGradients)));
 	}
@@ -565,6 +583,7 @@ public class MultinomialModel extends Model{
 		if (isDinuc)	dinucGradients = Array.addScalarMultiply(dinucGradients, 2*lambda, dinucBetas);
 		if (isShape)	shapeGradients = Array.addScalarMultiply(shapeGradients, 2*lambda, shapeBetas);
 		
+		evaluatedDataPoints += nCount;
 		return (new CompactGradientOutput(functionValue, toVector(isNSBinding, 
 				nsBindingGradient, nucGradients, dinucGradients, shapeGradients)));
 	}
@@ -665,6 +684,8 @@ public class MultinomialModel extends Model{
 			nucGradients	= Array.addScalarMultiply(nucGradients, 2*lambda, nucBetas);
 			if (isDinuc)	dinucGradients = Array.addScalarMultiply(dinucGradients, 2*lambda, dinucBetas);
 			if (isShape)	shapeGradients = Array.addScalarMultiply(shapeGradients, 2*lambda, shapeBetas);
+			
+			evaluatedDataPoints += nCount;
 			
 			return (new CompactGradientOutput(functionValue, toVector(isNSBinding, nsBindingGradient, nucGradients, dinucGradients, shapeGradients), hessian));
 		} else {

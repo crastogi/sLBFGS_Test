@@ -45,7 +45,13 @@ public abstract class Model {
 		return;
 	}
 	
+	public void resetDataLoopCount() {
+		evaluatedDataPoints = 0;
+	}
+	
 	public abstract CompactGradientOutput stochasticEvaluate() throws Exception;
+	
+	public abstract CompactGradientOutput stochasticEvaluate(ArrayList<Integer> idx) throws Exception;
 	
 	//The user must check to see if o is the right data type
 	public abstract void replaceData(Object o);

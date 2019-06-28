@@ -117,7 +117,7 @@ public class HTSELEXRegression_StochasticTesting {
 			//We do not want to perform cross-validation on intermediate steps
 			R1DataTrainOnly = new ArrayList<Object[]>();
 			R1DataTrainOnly.add(R1Data.get(0));
-			if (uniformK) {
+			if (uniformK) {				
 				for (int flankLength : flankLengths) {
 					for (int k : r1TestKs) {
 						//Test to see if there are any windows that can accomodate said 
@@ -160,8 +160,26 @@ public class HTSELEXRegression_StochasticTesting {
 								mmModel.threadPoolShutdown();
 								return;
 							}
+							printFit(minFit(currFits));
+							
+							// TODO
+							// LBFGS(model, lbfgsMem, lbfgsConvergence, lbfgsMaxIters, true, errorBars, storeHessian, isVerbose)
+							mmModel.evaluatedDataPoints = 0;
+							minimizer = new sLBFGS(mmModel, 200000, 200000, 200, 1000, 2, 4, 1, lbfgsConvergence, 0, isVerbose);
+							//minimizer = new kSVRG(mmModel, 5, false, false, 1000, 1000, 1, lbfgsConvergence, false, isVerbose);
+							//minimizer = new sLBFGS_kSVRG(mmModel, 5, 1000, 10000, 1000, 10, 200, 1, lbfgsConvergence, 0, isVerbose);
+							//minimizer = new SGD(mmModel, false, 1000, 1000, true, 0, .005, 1E-5, false, true, true);
+							minimizer.setXStar(minFit(currFits).finalPosition);
+							try {
+								currFits = minimizer.shiftPermutation(null, trajectoryFileName, nShifts, R1DataTrainOnly, null);
+							} catch (Exception e) {
+								e.printStackTrace();
+								mmModel.threadPoolShutdown();
+								return;
+							}
 							mmModel.threadPoolShutdown();
 							bestFit = minFit(currFits);
+							printFit(bestFit);
 						}
 	
 						for (int currMode=1; currMode<nModes; currMode++) {

@@ -476,6 +476,7 @@ public class MultiModeModel extends Model{
 			functionValue -= currentThread.get();
 		}
 		reverseBetas();			//Return to the original state
+		evaluatedDataPoints += nCount;
 		if (modeRegression) {
 			return functionValue;			
 		} else {
@@ -501,6 +502,19 @@ public class MultiModeModel extends Model{
 	
 	//TODO
 	//TODO
+	public CompactGradientOutput stochasticEvaluate(ArrayList<Integer> idx) 
+			throws Exception {
+		// Just use stochasticEvaluate but reset the indices
+		currBatchSize	= idx.size();
+		currBatchIdx	= new int[currBatchSize];
+		
+		for (int i=0; i<currBatchSize; i++) {
+			currBatchIdx[i] = idx.get(i);
+		}
+		
+		return stochasticEvaluate();
+	}
+	
 	public CompactGradientOutput stochasticEvaluate() throws Exception {
 		if (modeRegression) {
 			throw new Exception("Evaluation Failure! Cannot perform mode regression with stochastic evaluate...");
@@ -560,6 +574,7 @@ public class MultiModeModel extends Model{
 		}		
 		dpTasks			= null;
 		
+		evaluatedDataPoints += currBatchSize;
 		return (new CompactGradientOutput(functionValue, gradients));
 	}
 	
@@ -629,6 +644,7 @@ public class MultiModeModel extends Model{
 		swTasks			= null;
 		threadResult	= null;
 		
+		evaluatedDataPoints += nCount;
 		return (new CompactGradientOutput(functionValue, gradients));
 	}
 	
@@ -681,6 +697,7 @@ public class MultiModeModel extends Model{
 		swTasks			= null;
 		threadResult	= null;
 		
+		evaluatedDataPoints += nCount;
 		return (new CompactGradientOutput(functionValue, gradients));
 	}
 	
@@ -803,6 +820,8 @@ public class MultiModeModel extends Model{
 			dpTasks			= null;
 			swTasks			= null;
 			threadResult	= null;
+			
+			evaluatedDataPoints += nCount;
 			
 			return (new CompactGradientOutput(functionValue, gradients, hessian));
 		} else {

@@ -1,5 +1,6 @@
 .DS_Store
 java/slbfgs/bin/
+java/NRLB/src/
 *.m~
 *.aux
 *.log

@@ -10,6 +10,7 @@ import base.*;
 public class Minimizer {
 	protected boolean crossValidate = false;
 	protected double epsilon, randomSeedScale = .05;
+	protected double[] xStar = null;
 	protected Model model;
 	
 	/* This is the function where the actual minimizer algorithm must be
@@ -73,6 +74,8 @@ public class Minimizer {
 				return new Fit[]{fitOutput};
 			}
 			
+			System.out.println("Testing hessian");
+			
 			//All work is in REDUCED space. Symmetrize to reduce errors
 			hessian = model.getHessian().hessian;
 			hessian = model.compressHessian(hessian);
@@ -81,6 +84,9 @@ public class Minimizer {
 			ev		= new EigenvalueDecomposition(new Matrix(hessian));
 			
 			realEV	= Array.maxNormalize(ev.getRealEigenvalues());
+			
+			Array.print(realEV);
+			
 			VMatrix	= ev.getV().getArray();
 			currLoc	= model.compressPositionVector(model.getPositionVector());
 			//Does a negative eigenvalue exist?
@@ -315,6 +321,38 @@ public class Minimizer {
 		}
 		out.gradientVector	= tempGradient;
 		return out;	
+	}
+	
+	protected Model.CompactGradientOutput stochasticEvaluate(double[] input) 
+			throws Exception {
+		Model.CompactGradientOutput out;
+		
+		input				= model.uncompress(input);
+		model.setParams(input);
+		out					= model.stochasticEvaluate();
+		//Handle the case where the gradient has not been defined
+		if (out==null)	throw new UnsupportedOperationException("The function "
+				+ "stochasticEvaluate() has not been defined!");
+		out.gradientVector	= model.compressGradient(out.gradientVector);
+		return out;
+	}
+	
+	protected Model.CompactGradientOutput stochasticEvaluate(double[] input, 
+			ArrayList<Integer> idx) throws Exception {
+		Model.CompactGradientOutput out;
+		
+		input				= model.uncompress(input);
+		model.setParams(input);
+		out					= model.stochasticEvaluate(idx);
+		//Handle the case where the gradient has not been defined
+		if (out==null)	throw new UnsupportedOperationException("The function "
+				+ "stochasticEvaluate() has not been defined!");
+		out.gradientVector	= model.compressGradient(out.gradientVector);
+		return out;
+	}
+	
+	public void setXStar(double[] input) {
+		xStar = Array.clone(input);
 	}
 	
 	protected void printStep(int iterations, int calls, double likelihood, 
