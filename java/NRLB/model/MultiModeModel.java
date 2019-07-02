@@ -563,8 +563,8 @@ public class MultiModeModel extends Model{
 		if (isNSBinding)	gradients[totFeatures-1] *= nsBindingValue;
 		
 		// Adjust for L2 Penalty
-		functionValue	=  functionValue/currBatchSize + lambda*Math.pow(Array.norm(getPositionVector()),2);
-		gradients		= Array.addScalarMultiply(Array.scalarMultiply(gradients, 1.0/((double) currBatchSize)), 2*lambda, betas);
+		functionValue	=  functionValue/currBatchSize + lambda*(1.0/((double) nCount))*Math.pow(Array.norm(getPositionVector()),2);
+		gradients		= Array.addScalarMultiply(Array.scalarMultiply(gradients, 1.0/((double) currBatchSize)), 2*lambda*(1.0/((double) nCount)), betas);
 
 		//Scrub inactive regions (for frozen fits)
 		for (int i=0; i<totFeatures; i++) {
