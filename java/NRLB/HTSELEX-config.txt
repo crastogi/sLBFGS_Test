@@ -2,7 +2,7 @@ nthreads			= 6					//	Number of threads
 isverbose			= true				//	Show step-by-step minimizer output
 lbfgsmem			= 200				//	Number of steps to adjust by
 lbfgsmaxiters		= 2500				//	Maximum number of steps to take
-lbfgsconvergence	= 5E-6				//	Convergence criteria 
+lbfgsconvergence	= 1E-7 //5E-6				//	Convergence criteria 
 .
 //**************
 //	INPUT DATA:
@@ -30,14 +30,14 @@ simpleSymmetry		= false
 nucSymmetry			= null				//	Nucleotide symmetry string
 dinucSymmetry		= null				//	Dinucleotide symmetry string
 testShifts			= true				//	Reseed with shifted motifs
-nShifts				= 0 				//	Number of shifts left/right to test
+nShifts				= 1	 				//	Number of shifts left/right to test
 crossValidate		= false				//	Cross validate?
 testRatio			= .5			//	Fraction of data to be held out	
 nFolds				= 10				//	Number of cross-validation sets
 lambda				= 1E-6
 
 multiMode			= true
-uniformK			= true
+uniformK			= false
 startKs				= 8, 8
 maxKs				= 8, 8
 nModes				= 2

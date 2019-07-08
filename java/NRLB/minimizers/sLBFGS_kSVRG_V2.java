@@ -2,22 +2,26 @@ package minimizers;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
 
 import base.*;
 
-public class sLBFGS_kSVRG extends Minimizer{
+public class sLBFGS_kSVRG_V2 extends Minimizer{
 	private boolean isVerbose;
-	private int k, d, N, bs, bH, currDepth, maxEpoch, memDepth, L, eIters;
+	private int k, d, N, bs, bH, currDepth, maxEpoch, memDepth, L, eIters, maxBindings;
 	private double eta, delta, epsilon, gradientNormBound = 100;
 	private double fdHVPStepSize = 5E-2;
-	private double[] rho;
+	private int[] PhiCount;
+	private double[] rho, PhiProb;
 	private double[][] s, y;
+	private ArrayList<Integer>[] PhiIdxes;
 	private Fit fitOutput;
 	private MersenneTwisterFast mtfast = new MersenneTwisterFast();
 	
 	// kSVRG object constructor; load basic minimization parameters. To be used 
 	// for all subsequent minimizations using this object.
-	public sLBFGS_kSVRG(Model model, int k, int gradientBatch, int hessianBatch,
+	public sLBFGS_kSVRG_V2(Model model, int k, int gradientBatch, int hessianBatch,
 			int maxEpoch, int hessianPeriod, int memorySize, double stepsize, 
 			double epsilon, double delta, boolean isVerbose) {
 		this.model		= model;
@@ -69,7 +73,7 @@ public class sLBFGS_kSVRG extends Minimizer{
 	}
 	
 	public Fit doMinimize(double[] seed, String trajectoryFile) throws Exception {
-		int maxBindings, min_TIdx, max_TIdx, currPhiSize, r = 0, huIters = 0;
+		int min_TIdx, max_TIdx, currPhiSize, r = 0, huIters = 0, group, currGroup;
 		currDepth = 0;
 		double egNorm, divisor, avgF;
 		int[] theta_m_binding, theta_m1_binding, ind, batchIdx, Phi, bsInd=null;
@@ -84,7 +88,7 @@ public class sLBFGS_kSVRG extends Minimizer{
 		y = new double[memDepth][d];
 		int[][] phiBlocks = idxAlloc();
 		double[][] theta_m, theta_m1;
-		ArrayList<Integer> PhiArray;
+		ArrayList<Integer> PhiArray, groupIdxes = new ArrayList<Integer>(bs);
 		ArrayList<Integer>[] subBindings;
 		Model.CompactGradientOutput fOut;
 		
@@ -107,6 +111,15 @@ public class sLBFGS_kSVRG extends Minimizer{
 		theta_m[0] = Array.clone(x0);
 		theta_m_binding = new int[N];
 		theta_m1_binding= new int[N];
+		PhiCount= new int[1];
+		PhiCount[0]= N;
+		PhiProb = new double[1];
+		PhiProb[0] = 1.0;
+		PhiIdxes = new ArrayList[1];
+		PhiIdxes[0] = new ArrayList<Integer>();
+		for (int idx=0; idx<N; idx++) {
+			PhiIdxes[theta_m_binding[idx]].add(idx);
+		}
 		// aBar_m must be set to the gradient on the whole dataset
 		aBar_m 	= gradientEval(x0, true).gradientVector;
 		
@@ -170,25 +183,14 @@ public class sLBFGS_kSVRG extends Minimizer{
 					fOut = stochasticEvaluate(x_t);
 					avgF +=fOut.functionValue;
 					f_it = fOut.gradientVector;
-					// Create a new sub binding array
-					for (int currM=0; currM<maxBindings; currM++) {
-						subBindings[currM].clear();
-					}
-					// Re-assign values in subBinding array
-					for (int idx=0; idx<bs; idx++) {
-						subBindings[theta_m_binding[batchIdx[idx]]].add(batchIdx[idx]);
-					}
-					// Now run stochastic evaluation on every theta_m batch
-					a_it = new double[d];
-					for (int currM=0; currM<maxBindings; currM++) {
-						if (subBindings[currM].size()==0) {
-							continue;
-						}
-						a_it = Array.add(a_it, Array.scalarMultiply(stochasticEvaluate(theta_m[currM], subBindings[currM]).gradientVector, subBindings[currM].size()));
-					}
+					// Create random indices and compute a_it
+					group = randGroup();	// Select group
+					randIdxes(group, groupIdxes);
+					a_it = stochasticEvaluate(theta_m[group], groupIdxes).gradientVector;
+					
 					// Compute SVRG gradient
 					for (int idx=0; idx<d; idx++) {
-						g_t[idx] = f_it[idx] - a_it[idx]/bs + aBar_m[idx];
+						g_t[idx] = f_it[idx] - a_it[idx] + aBar_m[idx];
 					}
 					// Update u_r with current position
 					u_r = Array.add(u_r, x_t);
@@ -309,6 +311,23 @@ public class sLBFGS_kSVRG extends Minimizer{
 					theta_m_binding[idx] = theta_m1_binding[idx]-min_TIdx;
 				}
 				maxBindings = theta_m1.length;
+				// Reset phiCounts; this is inefficient
+				PhiCount= new int[maxBindings];
+				PhiProb = new double[maxBindings];
+				PhiIdxes = new ArrayList[maxBindings];
+				for (int currM=0; currM<maxBindings; currM++) {
+					PhiIdxes[currM] = new ArrayList<Integer>();					
+				}
+				for (int idx=0; idx<N; idx++) {
+					currGroup = theta_m_binding[idx];
+					PhiCount[currGroup]++;
+					PhiIdxes[currGroup].add(idx);
+				}
+				PhiProb[0] = PhiCount[0]/((double) N);
+				for (int currM=1; currM<maxBindings; currM++) {
+					PhiProb[currM] = PhiProb[currM-1] + PhiCount[currM]/((double) N);					
+				}
+				PhiProb[maxBindings-1] = 1.0;
 			}
 		}
 		throw new Exception("kSVRG Failure: maximum epochs exceeded without convergence!");
@@ -421,5 +440,39 @@ public class sLBFGS_kSVRG extends Minimizer{
 		}
 		
 		return output;
+	}
+	
+	// Generate random group
+	private int randGroup() {
+		// Start by generating a random double
+		double randD = mtfast.nextDouble();
+
+		// Return group
+		for (int currGroup=maxBindings-2; currGroup>=0; currGroup--) {
+			if (PhiProb[currGroup]<=randD) {
+				return (currGroup+1);
+			}
+		}
+		return 0;
+	}
+	
+	// Generate random ordering for a group given batchsize, pass by reference
+	private void randIdxes(int group, ArrayList<Integer> input) {
+		HashSet<Integer> h = new HashSet<Integer>();	
+		
+		// Create list of candidates
+		for (int i=0; i<k; i++) {
+			h.add(mtfast.nextInt(PhiCount[group]));
+		}
+		while(h.size()<k) {
+			h.add(mtfast.nextInt(PhiCount[group]));
+		}
+		
+		// Copy into input
+		input.clear();
+		Iterator<Integer> i = h.iterator(); 
+        while (i.hasNext()) {
+        	input.add(PhiIdxes[group].get(i.next()));
+        }
 	}
 }

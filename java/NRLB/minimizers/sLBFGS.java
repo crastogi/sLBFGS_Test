@@ -108,6 +108,8 @@ public class sLBFGS extends Minimizer{
 			if (Array.norm(fOut.gradientVector)/Math.max(1, Array.norm(w_k)) < epsilon) {
 				fitOutput.recordFit(k, -1, (System.nanoTime()-tStart)/1E9, fOut.functionValue, model);
 				System.out.println("Convergence criteria met.");
+				model.hessianEval();
+				fitOutput.storeHessian(model.getHessian());
 				return fitOutput;
 			}
 			if (k==maxEpoch) {

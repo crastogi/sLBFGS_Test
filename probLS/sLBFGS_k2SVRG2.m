@@ -61,14 +61,16 @@ function [path, function_values, grad_norm] = sLBFGS_k2SVRG(ff, x0, ...
                 x_t_pos(t+1,:) = x_t;
                 currGroup = randsample(A(:,1),1,true,sampDist);
                 i_t = randsample(find(theta_m_binding==currGroup), bs);
-                % Line 11
-                sub_bindings = theta_m_binding(i_t);
-                a_it = 0;
-                for curr_theta = unique(sub_bindings)
-                    [~, sg] = ff(theta_m(curr_theta,:)', i_t(sub_bindings==curr_theta));
-                    a_it = a_it + sum(sub_bindings==curr_theta)*sg;
-                end
-                a_it = a_it/bs;
+                % Line 11, optimized
+                [~, a_it] = ff(theta_m(currGroup,:)', i_t);
+%                 % Line 11
+%                 sub_bindings = theta_m_binding(i_t);
+%                 a_it = 0;
+%                 for curr_theta = unique(sub_bindings)
+%                     [~, sg] = ff(theta_m(curr_theta,:)', i_t(sub_bindings==curr_theta));
+%                     a_it = a_it + sum(sub_bindings==curr_theta)*sg;
+%                 end
+%                 a_it = a_it/bs;
                 [~, f_it] = ff(x_t', i_t);
                 g_it = f_it' - a_it' + aBar_m';
                 

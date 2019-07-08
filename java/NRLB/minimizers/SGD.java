@@ -86,7 +86,7 @@ public class SGD extends Minimizer{
 				System.out.print("    Epochs   Data Loops           "+
 						"Likelihood       Distance Moved        Gradient Norm");
 			} else {
-				System.out.println("    Epochs   Data Loops       "+
+				System.out.print("    Epochs   Data Loops       "+
 						"Distance Moved        Gradient Norm");
 			}
 			if (xStar!=null) {
@@ -105,11 +105,11 @@ public class SGD extends Minimizer{
 				mu_k 		= Array.clone(out.gradientVector);
 				if (isVerbose) {
 					if (xStar!=null) {
-						printStep(m, model.evaluatedDataPoints/N, currFVal,
+						printStep(m, model.evaluatedDataPoints/N,
 								Array.norm(Array.subtract(w_k, x_t_prev)), 
 								Array.norm(mu_k), Array.norm(Array.subtract(w_k, xStar)));
 					} else {
-						printStep(m, model.evaluatedDataPoints/N, currFVal,
+						printStep(m, model.evaluatedDataPoints/N,
 								Array.norm(Array.subtract(w_k, x_t_prev)), 
 						Array.norm(mu_k));
 					}
@@ -127,11 +127,11 @@ public class SGD extends Minimizer{
 				avg_g = Array.scalarMultiply(avg_g, 1.0/((double) eIters));
 				if (isVerbose) {
 					if (xStar!=null) {
-						printStep(m, model.evaluatedDataPoints/N, 0,
+						printStep(m, model.evaluatedDataPoints/N,
 								Array.norm(Array.subtract(avg_x, x_t_prev)), 
 								Array.norm(avg_g), Array.norm(Array.subtract(x_t, xStar)));
 					} else {
-						printStep(m, model.evaluatedDataPoints/N, 0,
+						printStep(m, model.evaluatedDataPoints/N,
 								Array.norm(Array.subtract(avg_x, x_t_prev)), 
 								Array.norm(avg_g));
 					}

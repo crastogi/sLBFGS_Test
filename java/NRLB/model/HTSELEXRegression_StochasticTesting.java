@@ -152,6 +152,7 @@ public class HTSELEXRegression_StochasticTesting {
 							mmModel = new MultiModeModel(nThreads, shapeModel, ((Data) R1Data.get(0)[0]), isFlank, currFlank, 
 									false, isShape, isNSBinding, currKs, nucSym, null);
 							mmModel.setLambda(lambda*mmModel.getNCount());
+							
 							minimizer = newMinimizer(mmModel);
 							try {
 								currFits = minimizer.shiftPermutation(null, trajectoryFileName, nShifts, R1DataTrainOnly, null);
@@ -160,23 +161,18 @@ public class HTSELEXRegression_StochasticTesting {
 								mmModel.threadPoolShutdown();
 								return;
 							}
-							printFit(minFit(currFits));
+//							printFit(minFit(currFits));
 							
-							// TODO
-							// LBFGS(model, lbfgsMem, lbfgsConvergence, lbfgsMaxIters, true, errorBars, storeHessian, isVerbose)
-							mmModel.evaluatedDataPoints = 0;
-							minimizer = new sLBFGS(mmModel, 200000, 200000, 200, 1000, 2, 4, 1, lbfgsConvergence, 0, isVerbose);
-							//minimizer = new kSVRG(mmModel, 5, false, false, 1000, 1000, 1, lbfgsConvergence, false, isVerbose);
-							//minimizer = new sLBFGS_kSVRG(mmModel, 5, 1000, 10000, 1000, 10, 200, 1, lbfgsConvergence, 0, isVerbose);
-							//minimizer = new SGD(mmModel, false, 1000, 1000, true, 0, .005, 1E-5, false, true, true);
-							minimizer.setXStar(minFit(currFits).finalPosition);
-							try {
-								currFits = minimizer.shiftPermutation(null, trajectoryFileName, nShifts, R1DataTrainOnly, null);
-							} catch (Exception e) {
-								e.printStackTrace();
-								mmModel.threadPoolShutdown();
-								return;
-							}
+//							mmModel.evaluatedDataPoints = 0;
+//							minimizer = newMinimizer(mmModel);
+//							minimizer.setXStar(minFit(currFits).finalPosition);
+//							try {
+//								currFits = minimizer.shiftPermutation(null, trajectoryFileName, nShifts, R1DataTrainOnly, null);
+//							} catch (Exception e) {
+//								e.printStackTrace();
+//								mmModel.threadPoolShutdown();
+//								return;
+//							}
 							mmModel.threadPoolShutdown();
 							bestFit = minFit(currFits);
 							printFit(bestFit);
@@ -824,9 +820,16 @@ public class HTSELEXRegression_StochasticTesting {
 		}
 	}
 	
+	//TODO
 	private static Minimizer newMinimizer(Model model) {
-		return new LBFGS(model, lbfgsMem, lbfgsConvergence, lbfgsMaxIters, 
-				true, errorBars, storeHessian, isVerbose);
+//		return new LBFGS(model, lbfgsMem, lbfgsConvergence, lbfgsMaxIters, true, errorBars, storeHessian, isVerbose);
+//		return new sLBFGS(model, 20, 5000, 200, 1000, 20, 400, .005, 1E-7, 0, isVerbose);
+//		return new sLBFGS(model, 1000, 5000, 40, 1000, 10, 100, .02, 1E-7, 0, isVerbose);
+		//return new kSVRG(model, 10, true, true, 50, 1000, .01, lbfgsConvergence, false, isVerbose);
+		return new sLBFGS_kSVRG(model, 10, 500, 5000, 1000, 10, 180, .01, lbfgsConvergence, 0, isVerbose);
+//		return new sLBFGS_kSVRG_V2(model, 5, 500, 5000, 1000, 10, 80, .005, lbfgsConvergence, 0, isVerbose);
+		//return new sLBFGS_kSVRG(model, 5, 1000, 5000, 1000, 10, 40, .02, 1E-7, 0, isVerbose);
+		//return new SGD(model, false, 100, 1000, false, 500, .005, 1E-5, false, true, true);
 	}
 	
 	private static void symBuilder(int k) {
@@ -964,6 +967,11 @@ public class HTSELEXRegression_StochasticTesting {
 					trainProbes.add(currSeq.getValue());
 					trainCounts.add(currCount);							
 				}
+				
+				//TODO: Terminates file reading
+//				if (trainProbes.size()>99) {
+//					break;
+//				}
 			}
 			br.close();
 		} catch (Exception e) {
