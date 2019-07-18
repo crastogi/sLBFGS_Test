@@ -1,5 +1,7 @@
 package minimizers;
 
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -8,8 +10,8 @@ import base.*;
 public class sLBFGS_kSVRG extends Minimizer{
 	private boolean isVerbose;
 	private int k, d, N, bs, bH, currDepth, maxEpoch, memDepth, L, eIters;
-	private double eta, delta, epsilon, gradientNormBound = 100;
-	private double fdHVPStepSize = 5E-2;
+	private double eta, delta, epsilon, gradientNormBound = 2;
+	private double fdHVPStepSize = 5E-3;
 	private double[] rho;
 	private double[][] s, y;
 	private Fit fitOutput;
@@ -87,7 +89,14 @@ public class sLBFGS_kSVRG extends Minimizer{
 		ArrayList<Integer> PhiArray;
 		ArrayList<Integer>[] subBindings;
 		Model.CompactGradientOutput fOut;
-		
+
+		//TODO:
+		double gNormMean = 0, egNormMean = 0, desiredNorm = 1;
+		double gDecayRate = .1;			// Decay rate for function gradient
+		double egDecayRate= .1;			// egNorm decay rate
+		PrintStream outputFile	= new PrintStream(new FileOutputStream("/Users/chaitanya/Documents/GitWorkspaces/slbfgs/java/output/RawPath_2.txt"));
+		PrintStream original	= System.out;
+
 		/*Check to see if seed is of correct length and symmetrize seed, if need
 		 * be. If no seed is provided, use a random start point to break 
 		 * symmetry. */
@@ -109,6 +118,10 @@ public class sLBFGS_kSVRG extends Minimizer{
 		theta_m1_binding= new int[N];
 		// aBar_m must be set to the gradient on the whole dataset
 		aBar_m 	= gradientEval(x0, true).gradientVector;
+		
+		//TODO:
+		gNormMean = Array.norm(aBar_m);
+		egNormMean= gNormMean;
 		
 		// Print reporting line
 		if (isVerbose) {
@@ -151,16 +164,17 @@ public class sLBFGS_kSVRG extends Minimizer{
 				}
 				// Loop over epoch iterates
 				for (int t=0; t<eIters; t++) {
-					// Update average stores
-					for (int currIdx=0; currIdx<d; currIdx++) {
-						avg_x[currIdx] += x_t[currIdx];
-						avg_g[currIdx] += g_t[currIdx];
-					}
+//					// Update average stores
+//					for (int currIdx=0; currIdx<d; currIdx++) {
+//						avg_x[currIdx] += x_t[currIdx];
+//						avg_g[currIdx] += g_t[currIdx];
+//					}
 					// Update batch idx directly
-					model.currBatchIdx = Arrays.copyOfRange(bsInd, 
-							j*eIters*bs+t*bs, j*eIters*bs+(t+1)*bs);
+					//model.currBatchIdx = Arrays.copyOfRange(bsInd, 
+					//		j*eIters*bs+t*bs, j*eIters*bs+(t+1)*bs);
+					//model.currBatchSize = bs;
+					model.sampleBatch(bs);
 					batchIdx = model.currBatchIdx;
-					model.currBatchSize = bs;
 					
 					//TODO:
 //					System.out.println("For step t = "+t);
@@ -193,21 +207,48 @@ public class sLBFGS_kSVRG extends Minimizer{
 					// Update u_r with current position
 					u_r = Array.add(u_r, x_t);
 					
+					//TODO
+					gNormMean = gDecayRate*Array.norm(g_t)+(1-gDecayRate)*gNormMean;
+					g_t = Array.scalarMultiply(g_t, gNormMean/Array.norm(g_t));
+					
 					// Compute next iteration step; condition the gradient so as not to produce rapid oscilations (extreme function values)
 					if (r < 1) {						// Until a single hessian correction has taken place, H_0 = I
 						effGrad = g_t;
 					} else {							// Compute the two-loop recursion product
 						effGrad = twoLoopRecursion(g_t);
 					}			
-					// Bound the effective gradient update step
 					egNorm = Array.norm(effGrad);
-					divisor = 1;
-					while (egNorm/divisor > gradientNormBound) {
-						divisor *= 10;
+					
+					if (Double.isNaN(egNorm) || Double.isInfinite(egNorm)) {
+						throw new Exception("sLBFGS+kSVRG Failure: NaN encountered! Try reducing the step size...");
 					}
+					
+					//TODO:
+					// See if egNorm spikes
+					if (egNorm > 2.718282*egNormMean && r>1) {
+						desiredNorm = egNormMean;
+					} else {
+						desiredNorm = egNorm;
+					}
+					// Bound gradient update
+					desiredNorm = Math.min(desiredNorm, d*gradientNormBound);
+					// Compute exponential moving average
+					egNormMean = egDecayRate*desiredNorm+(1-egDecayRate)*egNormMean;
+					divisor = egNorm/egNormMean;
+					
 					// Use typical update step
 					x_t = Array.addScalarMultiply(x_t, -eta/divisor, effGrad);
 					huIters++;
+					
+					//TODO: test new placement here
+					// Update average stores
+					for (int currIdx=0; currIdx<d; currIdx++) {
+						avg_x[currIdx] += x_t[currIdx];
+						avg_g[currIdx] += g_t[currIdx];
+					}
+					
+					//TODO:
+					String hessUpdate="";
 					
 					// Check to see if L iterations have passed (triggers hessian update)
 					if (huIters % L == 0) {
@@ -225,13 +266,26 @@ public class sLBFGS_kSVRG extends Minimizer{
 						y_r = Array.subtract(stochasticEvaluate(Array.addScalarMultiply(u_r, fdHVPStepSize, s_r)).gradientVector, 
 								stochasticEvaluate(Array.addScalarMultiply(u_r, -fdHVPStepSize, s_r)).gradientVector);
 						y_r = Array.scalarMultiply(y_r, 1.0/(2*fdHVPStepSize));
+						
+						//TODO
+						y_r = Array.addScalarMultiply(y_r, 0.0, s_r);
+						
 						// Store latest values of s_r and y_r
 						add(s_r, y_r);
+						
+						//TODO
+						hessUpdate = Double.toString(Array.dist(u_r, u_r_prev));
 						
 						// Resetting u_r for next evaluation
 				        u_r_prev = Array.clone(u_r);
 				        u_r = new double[d];
 					}
+					
+					//TODO: Write to file
+					System.setOut(outputFile);
+					System.out.print(m+"\t"+j+"\t"+t+"\t"+hessUpdate+"\t");
+					Array.print(Array.cat(Array.cat(Array.cat(x_t, g_t),Array.cat(f_it, a_it)), Array.cat(aBar_m, Array.cat(effGrad, egNorm/divisor))));
+					System.setOut(original);
 				}
 
 				// Phi Array
@@ -288,6 +342,12 @@ public class sLBFGS_kSVRG extends Minimizer{
 								Array.norm(Array.subtract(xBar, x_t_prev)), 
 								Array.norm(aBar_m), fOut.functionValue, Array.norm(fOut.gradientVector));
 					}
+					
+					//TODO:
+					System.setOut(outputFile);
+					System.out.print(m+"\t"+j+"\t>\t\t");
+					Array.print(Array.cat(Array.cat(xBar, aBar_m), Array.cat(new double[4*d], fOut.functionValue)));
+					System.setOut(original);
 				}
 				x_t_prev = Array.clone(xBar);
 				// Check for convergence

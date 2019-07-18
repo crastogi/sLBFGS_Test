@@ -109,7 +109,7 @@ public class HTSELEXRegression {
 		results.defineDataset(experimentName, "NA", dataDir+experimentName+".tsv", 
 				lFlank, rFlank, ((Data) R1Data.get(0)[0]).nCount, false, 0, 0);
 		results.defineR0Model(R0Model);
-		results.autoSave(outputDir+"/"+experimentName+"_R1");
+		results.autoSave(outputDir+"/"+experimentName+"_R"+round);
 		
 		if (multiMode) {
 			//We do not want to perform cross-validation on intermediate steps
@@ -540,10 +540,10 @@ public class HTSELEXRegression {
 	}
 	
 	private static void saveR1Results(MultinomialResults results) {
-		results.print(outputDir+"/"+experimentName+"_R1", printPSAM, 
+		results.print(outputDir+"/"+experimentName+"_R"+round, printPSAM, 
 				printSeeds, printRaw);
-		results.printList(outputDir+"/"+experimentName+"_R1", false);
-		results.printList(outputDir+"/"+experimentName+"_R1", true);
+		results.printList(outputDir+"/"+experimentName+"_R"+round, false);
+		results.printList(outputDir+"/"+experimentName+"_R"+round, true);
 	}
 	
 	private static double[] generateSeed(int currK) {

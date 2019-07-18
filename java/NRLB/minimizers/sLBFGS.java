@@ -1,5 +1,7 @@
 package minimizers;
 
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Random;
 
@@ -8,7 +10,7 @@ import base.*;
 public class sLBFGS extends Minimizer{
 	private boolean isVerbose, averageSteps = false;
 	private int d, N, b, bH, M, m, L, currDepth, maxEpoch;
-	private double eta, delta, fdHVPStepSize = 5E-2, gradientNormBound = 100;
+	private double eta, delta, fdHVPStepSize = 5E-2, gradientNormBound = 2;
 	private double[] rho;
 	private double[][] s, y;
 	private Fit fitOutput;
@@ -63,6 +65,13 @@ public class sLBFGS extends Minimizer{
 		ArrayList<double[]> x_t_hist = new ArrayList<double[]>();
 		Random generator = new Random();
 		
+		//TODO:
+		double gNormMean = 0, egNormMean = 0, desiredNorm = 1;
+		double gDecayRate = .1;			// Decay rate for function gradient
+		double egDecayRate= .1;			// egNorm decay rate
+		PrintStream outputFile	= new PrintStream(new FileOutputStream("/Users/chaitanya/Documents/GitWorkspaces/slbfgs/java/output/RawPath_2.txt"));
+		PrintStream original	= System.out;
+		
 		// Deal with a potential seed and initialize
 		if (seed!=null) {
 			try {
@@ -87,6 +96,10 @@ public class sLBFGS extends Minimizer{
 			// Print some information about the current epoch
 			if (isVerbose) {
 				if (k==0) {
+					//TODO:
+					gNormMean = Array.norm(fOut.gradientVector);
+					egNormMean= gNormMean;
+					
 					System.out.println("Starting Function Value: "+fOut.functionValue);
 					System.out.println("    Epochs   Data Loops           Likelihood       Distance Moved"+
 							"        Gradient Norm");
@@ -119,7 +132,13 @@ public class sLBFGS extends Minimizer{
 			mu_k = Array.clone(fOut.gradientVector);		// Assign variance reduced gradient
 			x_t = Array.clone(w_k);							// Set x_t to current value of w_k
 			w_k_prev = Array.clone(w_k);					
-						
+			
+			//TODO:
+			System.setOut(outputFile);
+			System.out.print(k+"\t"+m+"\t>\t\t");
+			Array.print(Array.cat(Array.cat(w_k, mu_k), Array.cat(new double[4*d], fOut.functionValue)));
+			System.setOut(original);
+			
 			// Perform m stochastic iterations before a full gradient computation takes place
 			for (int t=1; t<=m; t++) {
 				// Compute the current stochastic gradient estimate; begin by sampling a minibatch
@@ -128,6 +147,10 @@ public class sLBFGS extends Minimizer{
 				grad_f_xt = stochasticEvaluate(x_t).gradientVector;
 				grad_f_wk = stochasticEvaluate(w_k).gradientVector;
 				v_t = Array.subtract(Array.add(grad_f_xt, mu_k), grad_f_wk);
+				
+				//TODO
+				gNormMean = gDecayRate*Array.norm(v_t)+(1-gDecayRate)*gNormMean;
+				v_t = Array.scalarMultiply(v_t, gNormMean/Array.norm(v_t));
 				
 				// Update u_r with current position
 				u_r = Array.add(u_r, x_t);			
@@ -140,11 +163,28 @@ public class sLBFGS extends Minimizer{
 				}			
 				// Bound the effective gradient update step
 				egNorm = Array.norm(effGrad);
-				divisor = 1;
-				while (egNorm/divisor > gradientNormBound) {
-					divisor *= 10;
+				
+				//TODO:
+				// See if egNorm spikes
+				if (egNorm > 2.718282*egNormMean && r>1) {
+					desiredNorm = egNormMean;
+				} else {
+					desiredNorm = egNorm;
 				}
-				x_t = Array.addScalarMultiply(x_t, -eta, Array.scalarMultiply(effGrad, 1/divisor));
+				// Bound gradient update
+				desiredNorm = Math.min(desiredNorm, d*gradientNormBound);
+				// Compute exponential moving average
+				egNormMean = egDecayRate*desiredNorm+(1-egDecayRate)*egNormMean;
+				//egNormMean = Math.min(egDecayRate*egNorm/conditioner+(1-egDecayRate)*egNormMean, d*gradientNormBound);
+				divisor = egNorm/egNormMean;
+//				divisor = 1;
+//				while (egNorm/divisor > gradientNormBound) {
+//					divisor *= 10;
+//				}
+				x_t = Array.addScalarMultiply(x_t, -eta/divisor, effGrad);
+				
+				//TODO:
+				String hessUpdate="";
 				
 				// Check to see if L iterations have passed (triggers hessian update)
 				if (t % L == 0) {
@@ -164,10 +204,18 @@ public class sLBFGS extends Minimizer{
 					// Store latest values of s_r and y_r
 					add(s_r, y_r);
 					
+					//TODO
+					hessUpdate = Double.toString(Array.dist(u_r, u_r_prev));
+					
 					// Resetting u_r for next evaluation
 			        u_r_prev = Array.clone(u_r);
 			        u_r = new double[d];
 				}
+				//TODO: Write to file
+				System.setOut(outputFile);
+				System.out.print(k+"\t"+t+"\t\t"+hessUpdate+"\t");
+				Array.print(Array.cat(Array.cat(Array.cat(x_t, v_t),Array.cat(grad_f_xt, grad_f_wk)), Array.cat(mu_k, Array.cat(effGrad, egNorm/divisor))));
+				System.setOut(original);
 			}
 			// Choose either the last position vector x_t or a random one from the previous epoch as the starting point for the next
 			if (averageSteps) {

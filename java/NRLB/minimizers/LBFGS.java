@@ -5,7 +5,7 @@ import base.*;
 public class LBFGS extends Minimizer{
 	private boolean isBracketed, useMCSearch, errorBars, storeHessian, isVerbose;
 	private int nDim, maxMemoryDepth, maxIterations, nLSEvals, nFunctionEvals;
-	private int maxLSIterations	= 20;
+	private int maxLSIterations	= 50;
 	private double uTol			= 1e-10;
 	private double stepAlphaMin = 1e-20;
 	private double stepAlphaMax = 1e20;

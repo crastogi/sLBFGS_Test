@@ -76,7 +76,7 @@ public class sLBFGS_kSVRG_V2 extends Minimizer{
 		int min_TIdx, max_TIdx, currPhiSize, r = 0, huIters = 0, group, currGroup;
 		currDepth = 0;
 		double egNorm, divisor, avgF;
-		int[] theta_m_binding, theta_m1_binding, ind, batchIdx, Phi, bsInd=null;
+		int[] theta_m_binding, theta_m1_binding, ind, batchIdx, Phi;
 		double[] x0, x_t, avg_x, avg_g, x_t_prev, g_t, f_it, a_it, aBar_m, xBar;
 		double[] effGrad;
 		// Average of path traveled in the current and previous inverse Hessian updates
@@ -91,7 +91,7 @@ public class sLBFGS_kSVRG_V2 extends Minimizer{
 		ArrayList<Integer> PhiArray, groupIdxes = new ArrayList<Integer>(bs);
 		ArrayList<Integer>[] subBindings;
 		Model.CompactGradientOutput fOut;
-		
+				
 		/*Check to see if seed is of correct length and symmetrize seed, if need
 		 * be. If no seed is provided, use a random start point to break 
 		 * symmetry. */
@@ -139,14 +139,11 @@ public class sLBFGS_kSVRG_V2 extends Minimizer{
 		for (int m=0; m<maxEpoch; m++) {
 			// Create a random permutation of the points
 			ind = fisherYates();
-			bsInd = fisherYates();
 			
 			//TODO:
 //			System.out.println("Start of new epoch m = "+m);
 //			System.out.print("ind:\t");
 //			Array.print(ind);
-//			System.out.print("bsInd:\t");
-//			Array.print(bsInd);
 			
 			// Loop over sub-ks
 			for (int j=0; j<k; j++) {
@@ -162,6 +159,19 @@ public class sLBFGS_kSVRG_V2 extends Minimizer{
 				for (int currM=0; currM<maxBindings; currM++) {
 					subBindings[currM] = new ArrayList<Integer>();					
 				}
+				
+				//TODO:
+//				System.out.print("New Bindings:\t");
+//				Array.print(theta_m_binding);
+//				System.out.println("New Splitting:");
+//				for (int currM=0; currM<maxBindings; currM++) {
+//					System.out.print("M: "+currM+"\t");
+//					for (int blah=0; blah<PhiIdxes[currM].size(); blah++) {
+//						System.out.print(PhiIdxes[currM].get(blah)+"\t");
+//					}
+//					System.out.print("\n");
+//				}
+				
 				// Loop over epoch iterates
 				for (int t=0; t<eIters; t++) {
 					// Update average stores
@@ -169,23 +179,20 @@ public class sLBFGS_kSVRG_V2 extends Minimizer{
 						avg_x[currIdx] += x_t[currIdx];
 						avg_g[currIdx] += g_t[currIdx];
 					}
-					// Update batch idx directly
-					model.currBatchIdx = Arrays.copyOfRange(bsInd, 
-							j*eIters*bs+t*bs, j*eIters*bs+(t+1)*bs);
-					batchIdx = model.currBatchIdx;
-					model.currBatchSize = bs;
-					
-					//TODO:
-//					System.out.println("For step t = "+t);
-//					System.out.print("cbIdx:\t");
-//					Array.print(batchIdx);
-					
-					fOut = stochasticEvaluate(x_t);
-					avgF +=fOut.functionValue;
-					f_it = fOut.gradientVector;
-					// Create random indices and compute a_it
+					// Create random indices 
 					group = randGroup();	// Select group
 					randIdxes(group, groupIdxes);
+					//TODO:
+//					System.out.println("For step t = "+t+"; Group:\t"+group);
+//					for (int cidx=0; cidx<bs; cidx++) {
+//						System.out.print(groupIdxes.get(cidx)+"\t");
+//					}
+//					System.out.print("\n");
+					
+					// Compute a_it and f_it
+					fOut = stochasticEvaluate(x_t, groupIdxes);
+					avgF +=fOut.functionValue;
+					f_it = fOut.gradientVector;
 					a_it = stochasticEvaluate(theta_m[group], groupIdxes).gradientVector;
 					
 					// Compute SVRG gradient
