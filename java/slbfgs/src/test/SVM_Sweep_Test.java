@@ -10,17 +10,17 @@ public class SVM_Sweep_Test {
 		boolean useReducedSpace = false;
 		SVM svm = new SVM(0.001);
 		int gradientBatch = 20;
-		int hessianPeriod = 5;
-		int stochIters = 10;
+		int hessianPeriod = 10;
+		int stochIters = 50;
 		int hessianBatch = 10*gradientBatch;
-		double stepSize = .2;
+		double stepSize = .1;
 		double epsilon = 1E-5;
 		int maxEpochs = 1000;
 		int svrgSubBatch = 1;
 		double[] x_min, dists, dLoops, epochs;
 		Fit fit = null;
 		Minimizer min = new Minimizer();
-		
+ 		
 		// Minimize with LBFGS to find true minimum
 		min = new LBFGS(svm, 200, 1E-6, 1000, true, true);
 		try {
@@ -32,9 +32,11 @@ public class SVM_Sweep_Test {
 		
 		// Test
 		svm.evaluatedDataPoints = 0;
-		min = new sLBFGS_kSVRG(svm, 4, 10, 250, 1000, 125, 5, .025, 1E-5, 0, true);
+		//min = new sLBFGS_kSVRG(svm, 4, 10, 250, 1000, 125, 5, .025, 1E-5, 0, true);
 		//min = new kSVRG(svm, 4, true, false, 10, 1000, .5, 1E-5, false, true);
 		//min = new SGD(svm, false, 20, 1000, true, 0, .01, 1E-5, false, true, true);
+//		min = new sLBFGS(svm, gradientBatch, hessianBatch, memoryDepth, 100, hessianPeriod, stochIters, stepSize, epsilon, 0.0, true);
+		min = new sLBFGS_PLS(svm, gradientBatch, hessianBatch, memoryDepth, 100, hessianPeriod, stochIters, stepSize, epsilon, 0.0, true);
 		min.setXStar(x_min);
 		try {
 			fit = min.doMinimize(new double[svm.nDim], null);

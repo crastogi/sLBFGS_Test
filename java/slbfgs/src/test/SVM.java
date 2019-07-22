@@ -86,27 +86,40 @@ public class SVM extends Model {
 	}
 	
 	public CompactGradientOutput stochasticEvaluate() {
-		double alpha, y;
-		double likelihood = 0, temp;
+		double alpha, y, varLik;
+		double likelihood = 0, temp, lik2 = 0;
 		double x[];
 		double gradient[] = new double[nDim];
+		double varGrad[] = new double[nDim];
 		
 		for (int i : currBatchIdx) {
 			x = data[i];
 			y = classes[i];
 			alpha = Array.dotProduct(x, theta);
 			temp = Math.max(0.0, 1 - y*alpha);
-			likelihood += temp*temp;
+			temp = temp*temp;
+			likelihood += temp;
+			lik2 += temp*temp;
 			if (y*alpha < 1.0) {
-				gradient = Array.addScalarMultiply(gradient, -1, Array.scalarMultiply(data[i], y*(1 - y*alpha)));
+				// Unwrapped gradient update
+				temp = y*(1 - y*alpha);
+				for (int j=0; j<nDim; j++) {
+					gradient[j] += -data[i][j]*temp;
+					varGrad[j] += data[i][j]*data[i][j]*temp*temp;
+				}
+//				gradient = Array.addScalarMultiply(gradient, -1, Array.scalarMultiply(data[i], temp));
 			}
+		}
+		varLik = (lik2-likelihood*likelihood/currBatchIdx.length)/(4*currBatchIdx.length*(currBatchIdx.length-1));
+		for (int j=0; j<nDim; j++) {
+			varGrad[j] = (varGrad[j]-gradient[j]*gradient[j]/currBatchIdx.length)/(currBatchIdx.length*(currBatchIdx.length-1));
 		}
 		likelihood /= 2*currBatchIdx.length;						// Normalize by the number of data points
 		likelihood += lambda*Array.dotProduct(theta, theta)/2;		// Add regularization
 		gradient = Array.scalarMultiply(gradient, 1/((double) currBatchIdx.length));
 		gradient = Array.addScalarMultiply(gradient, lambda, theta);
 		evaluatedDataPoints += currBatchIdx.length;
-		return (new CompactGradientOutput(likelihood, gradient));
+		return (new CompactGradientOutput(likelihood, gradient, varLik, varGrad));
 	}
 	
 	public CompactGradientOutput stochasticEvaluate(ArrayList<Integer> idx) {

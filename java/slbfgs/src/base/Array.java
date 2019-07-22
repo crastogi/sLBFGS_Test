@@ -11,6 +11,7 @@ public class Array {
 		return output;
 	}
 	
+	// Add two arrays together
 	public static double[] add(double[] a, double[] b) {
 		if (a.length != b.length){
 			throw new IllegalArgumentException("Array lengths do not match.");
@@ -20,6 +21,20 @@ public class Array {
 		for (int i=0; i<a.length; i++) {
 			output[i] = a[i]+b[i];
 		}
+		return output;
+	}
+	
+	// Add two matrices together
+	public static double[][] add(double[][] a, double[][] b) {
+		int n = a.length, m = a[0].length;
+		double[][] output = new double[n][m];
+		
+		for(int i = 0; i < n; i++) {
+			for(int j = 0; j < m; j++) {
+				output[i][j] = a[i][j] + b[i][j];
+			}
+		}
+		
 		return output;
 	}
 	
@@ -204,6 +219,28 @@ public class Array {
 		return output;
 	}
 	
+	// Matrix Copy Range
+	public static double[][] copyOfRange(double[][] input, int i1Start, int i1End, int i2Start, int i2End) {
+		int d1         =input.length;
+		int d2         =input[0].length;
+		double[][] out = new double[d1][d2];
+		for(int i1=i1Start; i1<i1End; i1++){
+			for(int i2=i2Start; i2<i2End; i2++){
+				out[i1-i1Start][i2-i2Start] = input[i1][i2];
+			}
+		}
+		return out;
+	}
+	
+	public static boolean contains(double[] input, double value) {
+		for (double currVal : input) {
+			if (value==currVal) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	public static boolean containsTrue(boolean[] input) {
 		for (boolean currBool : input) {
 			if (currBool) {
@@ -265,6 +302,18 @@ public class Array {
 		}
 		return output;
 	}
+		
+	//Exponentiate every element in the matrix
+	public static double[][] exp(double[][] input) {
+		int d1=input.length, d2=input[0].length;
+		double[][] output = new double[d1][d2];
+		for (int i1 = 0; i1 < d1; i1++) {
+			for (int i2 = 0; i2 < d2; i2++) {
+				output[i1][i2] = Math.exp(input[i1][i2]);
+			}
+		}
+		return output;
+	}
 	
 	//Compute the frobenius norm of a matrix
 	public static double frobenius(double[][] input) {
@@ -302,6 +351,16 @@ public class Array {
 			output[i] = Math.log(input[i]);
 		}
 		return output;
+	}
+
+	// Returns array index containing the matching the input value 
+	public static int matchIdx(double[] input, double value) {
+		for (int i=0; i<input.length; i++) {
+			if (value==input[i]) {
+				return i;
+			}
+		}
+		return -1;
 	}
 
 	//Return the maximum value of the array
@@ -528,6 +587,7 @@ public class Array {
 		return output;
 	}
 	
+	// Sum over all elements in array
 	public static double sum(double[] input) {
 		double output = 0;
 		for (int i=0; i<input.length; i++) {
@@ -536,6 +596,18 @@ public class Array {
 		return output;
 	}
 	
+	// Sum over all elements in matrix
+	public static double sum(double[][] input) {
+		double output = 0;
+		for (int i=0; i<input.length; i++) {
+			for (int j=0; j<input[i].length; j++) {
+				output += input[i][j];
+			}
+		}
+		return output;
+	}
+	
+	// Sum over all elements in array
 	public static double sum(int[] input) {
 		int output = 0;
 		for (int i=0; i<input.length; i++) {
