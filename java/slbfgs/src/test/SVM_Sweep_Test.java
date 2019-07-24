@@ -9,7 +9,7 @@ public class SVM_Sweep_Test {
 		int memoryDepth = 50;
 		boolean useReducedSpace = false;
 		SVM svm = new SVM(0.001);
-		int gradientBatch = 20;
+		int gradientBatch = 100;
 		int hessianPeriod = 10;
 		int stochIters = 50;
 		int hessianBatch = 10*gradientBatch;

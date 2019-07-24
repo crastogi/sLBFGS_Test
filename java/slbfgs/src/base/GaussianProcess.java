@@ -5,7 +5,7 @@ import Jama.*;
 
 public class GaussianProcess {
 	int N = 0;
-	public double c1, c2, f0, beta, sigmaf, sigmadf, offset = 10;
+	public double c1, c2, f0, beta, sigmaf, sigmadf, alpha0, offset = 10;
 	public double m0 = 0, dm0 = 0, V0 = 0, Vd0 = 0, dVd0 = 0;
 	Matrix A, G;
 	public double[] T, ordT, F, Y, dY_projected, Sigmaf;
@@ -13,30 +13,22 @@ public class GaussianProcess {
 
 	// Basic constructor; requires input of starting function value and scaling
 	// This allows the GP to be 'naturally scaled'
-	public GaussianProcess(double f0, double beta) {
+	public GaussianProcess(double f0, double beta, double alpha0) {
 		this.f0		= f0;
 		this.beta	= beta;
+		this.alpha0	= alpha0;
 		c1 			= .0001;		// Default values
 		c2 			= .99;
 	}
 	
 	// Change default c1, c2 values
-	public GaussianProcess(double c1, double c2, double f0, double beta) {
+	public GaussianProcess(double c1, double c2, double f0, double beta, 
+			double alpha0) {
 		this.f0		= f0;
 		this.beta	= beta;
+		this.alpha0	= alpha0;
 		this.c1 	= c1;
 		this.c2 	= c2;
-	}
-
-	public void updateGP(double[] Ti, double[] Yi, double[] dY_projectedi, int Ni, double sigmafi, double sigmadfi) {
-		this.T = Ti;
-		this.Y = Yi;
-		this.dY_projected = dY_projectedi;
-		this.N = Ni;
-		this.sigmaf = sigmafi;
-		this.sigmadf = sigmadfi;
-		
-		buildGP();
 	}
 	
 	public void updateGP(double t, double[] x, double f, double[] df, 
@@ -121,11 +113,6 @@ public class GaussianProcess {
 	    V0   = V(0.);
 	    Vd0  = Vd(0.);
 	    dVd0 = dVd(0.);
-	}
-	
-	// Function to return information from a given point
-	public void make_outs() {
-		
 	}
 
 	public double k(double a, double b) {

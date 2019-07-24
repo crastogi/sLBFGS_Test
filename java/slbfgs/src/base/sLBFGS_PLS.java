@@ -12,20 +12,28 @@ public class sLBFGS_PLS extends Minimizer{
 	private int maxPLSIterations	= 10;
 	private double eta, delta, fdHVPStepSize = 5E-2, gradientNormBound = 100;
 	private double alphaMin, alphaMax, alphaL, fL, gL, fT, gT, alphaU, fU, gU;
-	private double fFull;
+	private double fFull, effEtaMean;
 	// constants for Wolfe conditions (must be chosen 0 < c1 < c2 < 1)
-	private double c1 = .1;
+	private double c1 = .01;
 	private double c2 = .9;
 	private double stepAlphaMin = 1e-20;
 	private double stepAlphaMax = 1e20;
 	private double uTol			= 1e-10;
-	private double WolfeThreshold= 0.3;
+	private double WolfeThreshold= 0.30;
 	private double[] rho, w_k, mu_k;
 	private double[][] s, y;
 	private Fit fitOutput;
 	private Model.CompactGradientOutput fOut;
 	// Gaussian process used for evaluations
 	GaussianProcess gp;
+	
+	// Test parameters
+    boolean testNegGradStepSize		= false;
+    boolean testExceptionStepSize	= false;
+    boolean testLSFailureStepSize	= false;
+    double negGradStepSize 			= .01;
+    double exceptionStepSize		= .01;
+    double lsFailureStepSize		= .01;
 	
 	//LBFGS object constructor; load basic minimization parameters. To be used for all subsequent minimizations using this object.
 	public sLBFGS_PLS(Model model, int gradientBatch, int hessianBatch, int memorySize, 
@@ -55,13 +63,11 @@ public class sLBFGS_PLS extends Minimizer{
 		this.isVerbose	= isVerbose;
 	}
 	
-	//TODO: verify that the GP works properly (numerically, etc)
-	
 	public Fit doMinimize(double[] seed, String trajectoryFile) throws Exception {
 		boolean firstEval = true;
 		int r = 0;									// Number of currently computed Hessian correction pairs
 		currDepth = 0;
-		double tStart, egNorm, divisor, f_t;
+		double tStart, egNorm, divisor, f_t, effEta;
 		// Full gradient, variance reduced gradient, and components of variance reduced gradient
 		double[] v_t = new double[d];
 		// Effective gradient
@@ -82,8 +88,10 @@ public class sLBFGS_PLS extends Minimizer{
 		Model.CompactGradientOutput f_xt, f_wk;
 		
 		// Init 
-		w_k = new double[d];
-		mu_k = new double[d];
+		effEta		= eta;
+		effEtaMean	= eta;
+		w_k			= new double[d];
+		mu_k		= new double[d];
 		
 		// Deal with a potential seed and initialize
 		if (seed!=null) {
@@ -93,10 +101,10 @@ public class sLBFGS_PLS extends Minimizer{
 				throw new IllegalArgumentException("Improper seed!");
 			}
 		} else {
-			w_k = Array.scalarMultiply(Array.randomDouble(d), randomSeedScale);
+			w_k		= Array.scalarMultiply(Array.randomDouble(d), randomSeedScale);
 		}
-		fitOutput = model.generateFit(seed);
-		w_k_prev = Array.clone(w_k);
+		fitOutput	= model.generateFit(seed);
+		w_k_prev	= Array.clone(w_k);
 			
 		// Init the number of loops over data points
 		model.evaluatedDataPoints = 0;
@@ -153,14 +161,17 @@ public class sLBFGS_PLS extends Minimizer{
 						divisor *= 10;
 					}
 					// TODO: How do we deal with divisor?
-					plsOut = probLineSearch(x_t, f_t, v_t, f_xt.varF, f_xt.varDF, eta/divisor, Array.scalarMultiply(effGrad, -1.0));
+					plsOut = probLineSearch(x_t, f_t, v_t, f_xt.varF, f_xt.varDF, effEta/divisor, Array.scalarMultiply(effGrad, -1.0));
 					firstEval = false;
 					continue;
 				}
 				// Copy values from pls
-				x_t = plsOut.position;
-				f_t = plsOut.functionValue;
-				v_t = plsOut.gradientVector;
+				x_t 	= plsOut.position;
+				f_t 	= plsOut.functionValue;
+				v_t 	= plsOut.gradientVector;
+				effEta	= plsOut.effEta;
+//				
+//				System.out.println("effEta:\t"+effEta);
 				
 				// Update u_r with current position
 				u_r = Array.add(u_r, x_t);			
@@ -178,13 +189,12 @@ public class sLBFGS_PLS extends Minimizer{
 					divisor *= 10;
 				}
 				
-				//TODO: first make this work with alpha0 = eta, then make variable alpha0
 //				System.out.println("New Iterate=========");
 //				Array.print(x_t);
 //				Array.print(v_t);
 //				Array.print(effGrad);
 //				System.out.println("Divisor: "+divisor+"; egNorm: "+egNorm);
-				plsOut = probLineSearch(x_t, f_t, v_t, plsOut.varF, plsOut.varDF, eta/divisor, Array.scalarMultiply(effGrad, -1.0));
+				plsOut = probLineSearch(x_t, f_t, v_t, plsOut.varF, plsOut.varDF, effEta/divisor, Array.scalarMultiply(effGrad, -1.0));
 				
 				// Check to see if L iterations have passed (triggers hessian update)
 				if (t % L == 0) {
@@ -239,9 +249,9 @@ public class sLBFGS_PLS extends Minimizer{
 		// Start computing R. To do so, begin by computing gamma_k = s_k*y_k/(y_k*y_k)
 		gamma = Array.dotProduct(s[currDepth-1], y[currDepth-1])/
 				Array.dotProduct(y[currDepth-1], y[currDepth-1]);
-		// r = gamma_k*q/(1 + delta*gamma_k); the denominator includes the pseudo-hessian 
-		// regularization parameter delta NOTE: There is no need to multiply by I here, 
-		// as that will anyway produce a dot product 
+		// r = gamma_k*q/(1 + delta*gamma_k); the denominator includes the 
+		// pseudo-hessian regularization parameter delta NOTE: There is no need 
+		// to multiply by I here, as that will anyway produce a dot product 
 		r = Array.scalarMultiply(q, gamma/(1.0 + delta*gamma));
 		
 		// Second loop (goes in reverse, starting from the earliest entry)
@@ -300,7 +310,7 @@ public class sLBFGS_PLS extends Minimizer{
 		
 		// Create new GP
 		beta		= Array.norm(df0);		// Compute scaling factor beta
-		gp 			= new GaussianProcess(c1, c2, f0, beta);
+		gp 			= new GaussianProcess(c1, c2, f0, beta, alpha0);
 		
 		// Compute noise and function projections at start
 		tt			= 0;
@@ -315,10 +325,10 @@ public class sLBFGS_PLS extends Minimizer{
 		    // Begin by evaluating function and updating GP at new tt value.
 			evaluate_function(x0, tt, alpha0, dir);
 		    
-		    // Next, verify that the GP gradient at the origin is negative. If it is
-		    // not, it means the GP believes the objective function is increasing,
-		    // and the gradient direction is NOT a descent direction. Take a really
-		    // small step and terminate.
+		    // Next, verify that the GP gradient at the origin is negative. If 
+			// it is not, it means the GP believes the objective function is 
+			// increasing, and the gradient direction is NOT a descent 
+			// direction. Take a really small step and terminate.
 		    if (gp.d1m(0) > 0) {
 		        if (isVerbose) {
 		        	System.out.print("GP detects that the current direction "
@@ -327,15 +337,18 @@ public class sLBFGS_PLS extends Minimizer{
 		        			+ "iterations: "+gp.N+"; T string: ");
 		        	Array.print(gp.T);
 		        }
-		        // TODO: Test 'small step size' here
-		        tt = eta/alpha0;
+		        if (testNegGradStepSize) {
+		        	tt = eta*negGradStepSize/alpha0;
+		        } else {
+			        tt = eta/alpha0;
+		        }
 		        if (Array.contains(gp.T, tt)) {
-		        	// Position exists, return value
-		        	return make_outs(tt);
+		        	// Position exists, return value and reset alpha0
+		        	return make_outs(tt, true);
  		        } else {
- 		        	// Position does not exist, return output
+ 		        	// Position does not exist, return output and reset alpha0
  		        	evaluate_function(x0, tt, alpha0, dir);
- 		        	return make_outs(tt);
+ 		        	return make_outs(tt, true);
  		        }
 		    }
 		    
@@ -364,14 +377,14 @@ public class sLBFGS_PLS extends Minimizer{
 	        if (wolfeCrit) {
 	            // Points exist that match wolfe criteria. Find optimal one
 	            if (isVerbose) {
-	            	System.out.print("Found acceptable point. Number of line "
-	            			+ "search iterations: "+gp.N+"; Accepted T: "+
-	            			gp.T[idx]+"; T string: ");
-	            	Array.print(gp.T);
+//	            	System.out.print("Found acceptable point. Number of line "
+//	            			+ "search iterations: "+gp.N+"; Accepted T: "+
+//	            			gp.T[idx]+"; T string: ");
+//	            	Array.print(gp.T);
 	            }
 	            tt = gp.T[idx];
 	            // Find the corresponding gradient and variances of optimal pt
-	            return make_outs(tt); 
+	            return make_outs(tt, false); 
 	        }
 		    
 		    // Check to see if the number of line search steps has been exceeded
@@ -401,47 +414,63 @@ public class sLBFGS_PLS extends Minimizer{
 		            }
 		        }
 		    } catch (Exception e) {
-		        // An error has taken place in the line search. Exit making a small
-		        // step TODO or unit step in the original direction
+		    	// An error has taken place in the line search. Exit making a 
+		    	// small step or unit step in the original direction
 		        System.out.println("MCSEARCH FAILURE!");
 		        System.out.println(e.getMessage());
 		        System.out.print("T string: ");
 		        Array.print(gp.T);
 
-		        tt = eta/alpha0;
+		        if (testExceptionStepSize) {
+		        	tt = eta*exceptionStepSize/alpha0;
+		        } else {
+			        tt = eta/alpha0;
+		        }
 		        if (Array.contains(gp.T, tt)) {
 		        	// Position exists, return value
-		        	return make_outs(tt);
+		        	return make_outs(tt, true);
  		        } else {
  		        	// Position does not exist, return output
  		        	evaluate_function(x0, tt, alpha0, dir);
- 		        	return make_outs(tt);
+ 		        	return make_outs(tt, true);
  		        }
 		    }
 		}
 
 		// Algorithm reached limit without finding acceptable point; Evaluate a
 		// final time and return the "best" point (one with lowest function value)
-		// TODO make small step or unit step?
+		// make small step or unit step?
         if (isVerbose) {
         	System.out.print("Unable to find acceptable point. Number of line "
         			+ "search iterations: "+gp.N+"; T string: ");
         	Array.print(gp.T);
         }
-        idx		= 1;
-        gpMean	= Double.MAX_VALUE;		// Ignore idx = 0
-        // Evaluate GP Means
-        for (int currT=2; currT<gp.N; currT++) {
-    		// Check to see if the new gpMean is lower than the old one
-    		temp		= gp.m(currT);
-    		if (temp < gpMean) {
-    			idx		= currT;		// Set to new idx
-    			gpMean	= temp;
-    		}
+        if (testLSFailureStepSize) {
+        	tt = eta*lsFailureStepSize/alpha0;
+        	if (Array.contains(gp.T, tt)) {
+	        	// Position exists, return value
+	        	return make_outs(tt, true);
+	        } else {
+	        	// Position does not exist, return output
+	        	evaluate_function(x0, tt, alpha0, dir);
+	        	return make_outs(tt, true);
+	        }
+        } else {
+            idx		= 1;
+            gpMean	= Double.MAX_VALUE;		// Ignore idx = 0
+            // Evaluate GP Means
+            for (int currT=2; currT<gp.N; currT++) {
+        		// Check to see if the new gpMean is lower than the old one
+        		temp		= gp.m(currT);
+        		if (temp < gpMean) {
+        			idx		= currT;		// Set to new idx
+        			gpMean	= temp;
+        		}
+            }
+    		tt = gp.T[idx];
         }
-		tt = gp.T[idx];
 		// Return corresponding gradient and variances of optimal pt
-		return make_outs(tt);
+		return make_outs(tt, true);
 	}
 	
 	private void evaluate_function(double[] x0, double tt, double alpha0, 
@@ -464,40 +493,58 @@ public class sLBFGS_PLS extends Minimizer{
 		}
 		var_dfProj	= np.dot(np.square(dir), f_xt.varDF);
 	    
-//		System.out.println("New function evaluation------------------------");
-//		System.out.println(tt+"\t"+alpha0);
-//		Array.print(x0);
-//		Array.print(dir);
-//		Array.print(x_t);
-		
 	    // Test for NaN or Inf and reset
 		if (Double.isNaN(f) || Double.isInfinite(f)) {
-			throw new Exception("Optimizer Failure: NaN encountered!");
-			// TODO: maybe rescale?
+			throw new Exception("Optimizer Failure: NaN encountered during "
+					+ "line search! Try using a smaller step size.");
 		}
 	    
 	    // No numerical instability; update GP
 	    gp.updateGP(tt, x_t, f, df, dfProj, f_xt.varF, f_xt.varDF, var_dfProj);
 	}
 	
-	private CompactOutput make_outs(double tt) {
+	//TODO: See how effEta bounding, etc. work
+	private CompactOutput make_outs(double tt, boolean resetAlpha0) {
 		// First identify index of relevant output
 		int idx = Array.matchIdx(gp.T, tt);
+		double effEta;
 		
-		return (new CompactOutput(gp.X[idx], gp.F[idx], gp.dY[idx], gp.Sigmaf[idx], gp.Sigmadf[idx]));
+//		System.out.println("--- In make_outs ---");
+//		System.out.println("tt:\t"+tt+"; alpha0:\t"+gp.alpha0);
+		
+		// Next, change alpha0 
+		if (resetAlpha0) {
+			effEta 		= eta;
+			effEtaMean	= eta;
+		} else {
+			// Compute effective eta
+			effEta = gp.alpha0*tt;
+			// Bound alpha0 to average step size if it goes out of bounds
+			if (effEta > 10*effEtaMean || effEta < .1*effEtaMean) {
+				effEta = effEtaMean;
+			} else {
+				// Update effEtaMean
+				effEtaMean = .05*effEta + .95*effEtaMean*1.005;
+				effEtaMean = Math.min(effEtaMean, eta*5);
+				effEta = effEtaMean;
+			}
+		}
+		
+		// Return
+		return (new CompactOutput(gp.X[idx], gp.F[idx], gp.dY[idx], gp.Sigmaf[idx], gp.Sigmadf[idx], effEta));
 	}
 	
 	private double mcsearch(double alphaT) throws Exception {
 		boolean useModifiedFunc;
 		int nLSEvals;
-		double x0, currIntWidth, prevIntWidth, f0, g0, fTTest;
+		double currIntWidth, prevIntWidth, f0, g0, fTTest;
 		
-		//Check to see if guess alphaT is within bounds
+		// Check to see if guess alphaT is within bounds
 		if (alphaT<stepAlphaMin || alphaT>stepAlphaMax) {
 			throw new Exception("Line search failure: initial step alpha guess out of bounds!");
 		}
-		//Initialize variables and see if search direction is a descent direction
-		x0				= 0;
+		// Initialize variables and see if search direction is a descent 
+		// direction; x0 is implicitly set to 0
 		f0				= gp.m(0);
 		g0				= gp.d1m(0);
 		if (g0 > 0) {
@@ -706,16 +753,18 @@ public class sLBFGS_PLS extends Minimizer{
 	}
 	
 	private class CompactOutput {
-		public double functionValue, varF;
+		public double functionValue, varF, effEta;
 		public double[] position, gradientVector, varDF;
 
 		private CompactOutput(double[] position, double functionValue, 
-				double[] gradientVector, double varF, double[] varDF) {
+				double[] gradientVector, double varF, double[] varDF, 
+				double effEta) {
 			this.position		= Array.clone(position);
 			this.functionValue	= functionValue;
 			this.gradientVector	= Array.clone(gradientVector);
 			this.varF			= varF;
 			this.varDF			= Array.clone(varDF);
+			this.effEta			= effEta;
 		}
 	}
 }
