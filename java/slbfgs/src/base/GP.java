@@ -3,36 +3,38 @@ import java.util.Arrays;
 
 import Jama.*;
 
-public class GaussianProcess {
+public class GP {
 	int N = 0;
 	public double c1, c2, f0, beta, sigmaf, sigmadf, alpha0, offset = 10;
 	public double m0 = 0, dm0 = 0, V0 = 0, Vd0 = 0, dVd0 = 0;
 	Matrix A, G;
-	public double[] T, ordT, F, Y, dY_projected, Sigmaf;
+	public double[] dir, T, ordT, F, Y, dY_projected, Sigmaf;
 	public double[][] X, dY, Sigmadf;
 
 	// Basic constructor; requires input of starting function value and scaling
 	// This allows the GP to be 'naturally scaled'
-	public GaussianProcess(double f0, double beta, double alpha0) {
+	public GP(double f0, double beta, double alpha0, double[] dir) {
 		this.f0		= f0;
 		this.beta	= beta;
 		this.alpha0	= alpha0;
+		this.dir	= Array.clone(dir);
 		c1 			= .0001;		// Default values
 		c2 			= .99;
 	}
 	
 	// Change default c1, c2 values
-	public GaussianProcess(double c1, double c2, double f0, double beta, 
-			double alpha0) {
+	public GP(double c1, double c2, double f0, double beta, 
+			double alpha0, double[] dir) {
 		this.f0		= f0;
 		this.beta	= beta;
 		this.alpha0	= alpha0;
+		this.dir	= Array.clone(dir);
 		this.c1 	= c1;
 		this.c2 	= c2;
 	}
 	
 	public void updateGP(double t, double[] x, double f, double[] df, 
-			double dfProj, double var_f, double[] var_df, double var_dfProj) {
+			double var_f, double[] var_df) {
 		double tempSigma;
 		
 		// Store tested positions, function and adj. function values
@@ -43,7 +45,7 @@ public class GaussianProcess {
 		
 		// Store gradient and projected gradient values
 		dY			= np.stack(dY, df);
-		dY_projected= Array.cat(dY_projected, dfProj/beta);
+		dY_projected= Array.cat(dY_projected, Array.dotProduct(df, dir)/beta);
 		
 		// Store noise values
 		Sigmaf		= Array.cat(Sigmaf, var_f);
@@ -53,7 +55,7 @@ public class GaussianProcess {
 		if (tempSigma > sigmaf) {
 			sigmaf 	= tempSigma;
 		}
-		tempSigma	= Math.sqrt(var_dfProj)/beta;
+		tempSigma	= Math.sqrt(np.dot(np.square(dir),var_df))/beta;
 		if (tempSigma > sigmadf) {
 			sigmadf	= tempSigma;
 		}
@@ -289,6 +291,19 @@ public class GaussianProcess {
 		return Vd0df;
 	}
 	
+	public boolean contains(double tt) {
+		for (double currT : T) {
+			if (currT==tt) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public double[] truePosition(double tt) {
+		return Array.addScalarMultiply(X[0], tt*alpha0, dir);
+	}
+
 	public double probWolfe(int idx) {
 		return probWolfe(T[idx]);
 	}
@@ -335,5 +350,30 @@ public class GaussianProcess {
 
 	    p = bvn.cdf(xu, yu, rho) + bvn.cdf(xl, yl, rho) - bvn.cdf(xu, yl, rho) - bvn.cdf(xl, yu, rho);
 	    return p;
+	}
+	
+	public CompactOutput makeOuts(double tt, double effEta) {
+		// First identify index of relevant output
+		int idx = Array.matchIdx(T, tt);
+		
+		// Now create the CompactOutput object
+		return (new CompactOutput(X[idx], F[idx], dY[idx], Sigmaf[idx], 
+				Sigmadf[idx], effEta));
+	}
+	
+	public class CompactOutput {
+		public double functionValue, varF, effEta;
+		public double[] position, gradientVector, varDF;
+
+		public CompactOutput(double[] position, double functionValue, 
+				double[] gradientVector, double varF, double[] varDF, 
+				double effEta) {
+			this.position		= Array.clone(position);
+			this.functionValue	= functionValue;
+			this.gradientVector	= Array.clone(gradientVector);
+			this.varF			= varF;
+			this.varDF			= Array.clone(varDF);
+			this.effEta			= effEta;
+		}
 	}
 }

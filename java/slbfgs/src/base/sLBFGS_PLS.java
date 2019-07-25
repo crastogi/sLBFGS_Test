@@ -3,10 +3,8 @@ package base;
 import java.util.ArrayList;
 import java.util.Random;
 
-import probLineSearch.np;
-
 public class sLBFGS_PLS extends Minimizer{
-	private boolean isBracketed, isVerbose, randomSelect = false;
+	private boolean isBracketed, isVerbose, randomSelect = false, plsVerbose = false;
 	private int d, N, b, bH, M, m, L, currDepth, maxEpoch;
 	private int maxMCSIterations	= 10;
 	private int maxPLSIterations	= 10;
@@ -14,18 +12,18 @@ public class sLBFGS_PLS extends Minimizer{
 	private double alphaMin, alphaMax, alphaL, fL, gL, fT, gT, alphaU, fU, gU;
 	private double fFull, effEtaMean;
 	// constants for Wolfe conditions (must be chosen 0 < c1 < c2 < 1)
-	private double c1 = .01;
-	private double c2 = .9;
+	private double c1 = .15;
+	private double c2 = .85;
 	private double stepAlphaMin = 1e-20;
 	private double stepAlphaMax = 1e20;
 	private double uTol			= 1e-10;
-	private double WolfeThreshold= 0.30;
+	private double WolfeThreshold= 0.20;
 	private double[] rho, w_k, mu_k;
 	private double[][] s, y;
 	private Fit fitOutput;
 	private Model.CompactGradientOutput fOut;
 	// Gaussian process used for evaluations
-	GaussianProcess gp;
+	GP gp;
 	
 	// Test parameters
     boolean testNegGradStepSize		= false;
@@ -84,7 +82,7 @@ public class sLBFGS_PLS extends Minimizer{
 		// Stores the history of all previous steps in the current epoch
 		ArrayList<double[]> x_t_hist = new ArrayList<double[]>();
 		Random generator = new Random();
-		CompactOutput plsOut = null;
+		GP.CompactOutput plsOut = null;
 		Model.CompactGradientOutput f_xt, f_wk;
 		
 		// Init 
@@ -170,8 +168,6 @@ public class sLBFGS_PLS extends Minimizer{
 				f_t 	= plsOut.functionValue;
 				v_t 	= plsOut.gradientVector;
 				effEta	= plsOut.effEta;
-//				
-//				System.out.println("effEta:\t"+effEta);
 				
 				// Update u_r with current position
 				u_r = Array.add(u_r, x_t);			
@@ -189,6 +185,7 @@ public class sLBFGS_PLS extends Minimizer{
 					divisor *= 10;
 				}
 				
+				//TODO
 //				System.out.println("New Iterate=========");
 //				Array.print(x_t);
 //				Array.print(v_t);
@@ -292,12 +289,11 @@ public class sLBFGS_PLS extends Minimizer{
 		input[0] = newValue;
 	}
 	
-	private CompactOutput probLineSearch(double[] x0, double f0, double[] df0, 
+	private GP.CompactOutput probLineSearch(double[] x0, double f0, double[] df0, 
 			double var_f0, double[] var_df0, double alpha0, double[] dir) throws Exception{
 		boolean wolfeCrit;
 		int idx;
-		double tt, beta, var_dfProj, dfProj;
-		double wolfeValue, gpMean, temp;
+		double tt, beta, wolfeValue, gpMean, temp;
 
 		//TODO
 //		System.out.println("plsIn---------");
@@ -308,29 +304,24 @@ public class sLBFGS_PLS extends Minimizer{
 //		System.out.println("Norm varDF: "+Array.norm(var_df0));
 //		System.out.println("Norm dir: "+Array.norm(dir));
 		
-		// Create new GP
+		// Create new GP and update at start
 		beta		= Array.norm(df0);		// Compute scaling factor beta
-		gp 			= new GaussianProcess(c1, c2, f0, beta, alpha0);
-		
-		// Compute noise and function projections at start
+		gp 			= new GP(c1, c2, f0, beta, alpha0, dir);
 		tt			= 0;
-		dfProj		= Array.dotProduct(df0, dir);  
-	    var_dfProj	= np.dot(np.square(dir),var_df0);
-	    // Update GP at start
-	    gp.updateGP(tt, x0, f0, df0, dfProj, var_f0, var_df0, var_dfProj);
+	    gp.updateGP(tt, x0, f0, df0, var_f0, var_df0);
 		
 		// Set new start point and loop until budget is exhausted
 		tt  		= 1;
 		while (true) {
 		    // Begin by evaluating function and updating GP at new tt value.
-			evaluate_function(x0, tt, alpha0, dir);
+			evaluateFunction(tt);
 		    
 		    // Next, verify that the GP gradient at the origin is negative. If 
 			// it is not, it means the GP believes the objective function is 
 			// increasing, and the gradient direction is NOT a descent 
 			// direction. Take a really small step and terminate.
 		    if (gp.d1m(0) > 0) {
-		        if (isVerbose) {
+		        if (plsVerbose) {
 		        	System.out.print("GP detects that the current direction "
 		        			+ "is not a descent direction; taking a small step "
 		        			+ "and terminating. Number of line search "
@@ -342,14 +333,7 @@ public class sLBFGS_PLS extends Minimizer{
 		        } else {
 			        tt = eta/alpha0;
 		        }
-		        if (Array.contains(gp.T, tt)) {
-		        	// Position exists, return value and reset alpha0
-		        	return make_outs(tt, true);
- 		        } else {
- 		        	// Position does not exist, return output and reset alpha0
- 		        	evaluate_function(x0, tt, alpha0, dir);
- 		        	return make_outs(tt, true);
- 		        }
+		        return makeOuts(tt, true);
 		    }
 		    
 		    // Next, confirm if the new point satisfies the wolfe conditions
@@ -376,18 +360,20 @@ public class sLBFGS_PLS extends Minimizer{
 	        // See what points match Wolfe criteria, if any
 	        if (wolfeCrit) {
 	            // Points exist that match wolfe criteria. Find optimal one
-	            if (isVerbose) {
-//	            	System.out.print("Found acceptable point. Number of line "
-//	            			+ "search iterations: "+gp.N+"; Accepted T: "+
-//	            			gp.T[idx]+"; T string: ");
-//	            	Array.print(gp.T);
+	            if (plsVerbose) {
+	            	System.out.print("Found acceptable point. Number of line "
+	            			+ "search iterations: "+gp.N+"; Accepted T: "+
+	            			gp.T[idx]+"; T string: ");
+	            	Array.print(gp.T);
 	            }
 	            tt = gp.T[idx];
 	            // Find the corresponding gradient and variances of optimal pt
-	            return make_outs(tt, false); 
+	            return makeOuts(tt, false); 
 	        }
 		    
 		    // Check to see if the number of line search steps has been exceeded
+	        // Testing here allows the final point to be checked for passing the
+	        // Wolfe criteria
 		    if (gp.N >= maxPLSIterations) {
 		    	break;
 		    }
@@ -398,7 +384,7 @@ public class sLBFGS_PLS extends Minimizer{
 		        tt = mcsearch(Array.max(gp.T));
 		        // Check to see if tt has already been tested (occurs when an
 		        // existing point satisfies the non-probabilistic wolfe conditions)
-		        if (Array.contains(gp.T, tt)) {
+		        if (gp.contains(tt)) {
 		            // Check to see if tt is the same as the largest point tested
 		        	if (tt==Array.max(gp.T)) {
 		        		tt = Array.max(gp.T)*2;
@@ -416,45 +402,31 @@ public class sLBFGS_PLS extends Minimizer{
 		    } catch (Exception e) {
 		    	// An error has taken place in the line search. Exit making a 
 		    	// small step or unit step in the original direction
-		        System.out.println("MCSEARCH FAILURE!");
-		        System.out.println(e.getMessage());
-		        System.out.print("T string: ");
-		        Array.print(gp.T);
-
+		    	if (plsVerbose) {
+			    	System.err.println("MCSEARCH FAILURE!");
+			        System.err.println(e.getMessage());
+			        System.out.print("T string: ");
+			        Array.print(gp.T);		    		
+		    	}
 		        if (testExceptionStepSize) {
 		        	tt = eta*exceptionStepSize/alpha0;
 		        } else {
 			        tt = eta/alpha0;
 		        }
-		        if (Array.contains(gp.T, tt)) {
-		        	// Position exists, return value
-		        	return make_outs(tt, true);
- 		        } else {
- 		        	// Position does not exist, return output
- 		        	evaluate_function(x0, tt, alpha0, dir);
- 		        	return make_outs(tt, true);
- 		        }
+		        return makeOuts(tt, true);
 		    }
 		}
 
 		// Algorithm reached limit without finding acceptable point; Evaluate a
 		// final time and return the "best" point (one with lowest function value)
 		// make small step or unit step?
-        if (isVerbose) {
+        if (plsVerbose) {
         	System.out.print("Unable to find acceptable point. Number of line "
         			+ "search iterations: "+gp.N+"; T string: ");
         	Array.print(gp.T);
         }
         if (testLSFailureStepSize) {
         	tt = eta*lsFailureStepSize/alpha0;
-        	if (Array.contains(gp.T, tt)) {
-	        	// Position exists, return value
-	        	return make_outs(tt, true);
-	        } else {
-	        	// Position does not exist, return output
-	        	evaluate_function(x0, tt, alpha0, dir);
-	        	return make_outs(tt, true);
-	        }
         } else {
             idx		= 1;
             gpMean	= Double.MAX_VALUE;		// Ignore idx = 0
@@ -470,28 +442,24 @@ public class sLBFGS_PLS extends Minimizer{
     		tt = gp.T[idx];
         }
 		// Return corresponding gradient and variances of optimal pt
-		return make_outs(tt, true);
+        return makeOuts(tt, true);
 	}
 	
-	private void evaluate_function(double[] x0, double tt, double alpha0, 
-			double[] dir) throws Exception {
-		double f, dfProj, var_dfProj;
+	private void evaluateFunction(double tt) throws Exception {
+		double f;
 		double[] x_t, df = new double[d];
 		Model.CompactGradientOutput f_xt, f_wk;
 		
 		// Start by setting the minibatch and computing the new position
 		model.sampleBatch(b);
-		x_t		= Array.addScalarMultiply(x0, tt*alpha0, dir);
+		x_t		= gp.truePosition(tt);
 		// Next, compute the reduced variance function and gradient
 		f_xt	= stochasticEvaluate(x_t);
 		f_wk	= stochasticEvaluate(w_k);
 		f		= (f_xt.functionValue + fFull) - f_wk.functionValue;
-		dfProj	= 0;
 		for (int idx=0; idx<d; idx++) {
 			df[idx] = (f_xt.gradientVector[idx] + mu_k[idx]) - f_wk.gradientVector[idx];
-			dfProj	+= df[idx]*dir[idx];
 		}
-		var_dfProj	= np.dot(np.square(dir), f_xt.varDF);
 	    
 	    // Test for NaN or Inf and reset
 		if (Double.isNaN(f) || Double.isInfinite(f)) {
@@ -500,19 +468,23 @@ public class sLBFGS_PLS extends Minimizer{
 		}
 	    
 	    // No numerical instability; update GP
-	    gp.updateGP(tt, x_t, f, df, dfProj, f_xt.varF, f_xt.varDF, var_dfProj);
+	    gp.updateGP(tt, x_t, f, df, f_xt.varF, f_xt.varDF);
 	}
 	
-	//TODO: See how effEta bounding, etc. work
-	private CompactOutput make_outs(double tt, boolean resetAlpha0) {
-		// First identify index of relevant output
-		int idx = Array.matchIdx(gp.T, tt);
+	private GP.CompactOutput makeOuts(double tt, boolean resetAlpha0) throws Exception {
 		double effEta;
 		
+		// First, ensure that point exists
+    	if (!gp.contains(tt)) {
+        	// Position does not exist, return output
+        	evaluateFunction(tt);
+        }
+
+		//TODO:
 //		System.out.println("--- In make_outs ---");
 //		System.out.println("tt:\t"+tt+"; alpha0:\t"+gp.alpha0);
 		
-		// Next, change alpha0 
+    	// Next, compute next effective eta
 		if (resetAlpha0) {
 			effEta 		= eta;
 			effEtaMean	= eta;
@@ -530,8 +502,8 @@ public class sLBFGS_PLS extends Minimizer{
 			}
 		}
 		
-		// Return
-		return (new CompactOutput(gp.X[idx], gp.F[idx], gp.dY[idx], gp.Sigmaf[idx], gp.Sigmadf[idx], effEta));
+		// Finally, create output
+		return gp.makeOuts(tt, effEta);
 	}
 	
 	private double mcsearch(double alphaT) throws Exception {
@@ -750,21 +722,5 @@ public class sLBFGS_PLS extends Minimizer{
 			}
 		}
 		return stpf;
-	}
-	
-	private class CompactOutput {
-		public double functionValue, varF, effEta;
-		public double[] position, gradientVector, varDF;
-
-		private CompactOutput(double[] position, double functionValue, 
-				double[] gradientVector, double varF, double[] varDF, 
-				double effEta) {
-			this.position		= Array.clone(position);
-			this.functionValue	= functionValue;
-			this.gradientVector	= Array.clone(gradientVector);
-			this.varF			= varF;
-			this.varDF			= Array.clone(varDF);
-			this.effEta			= effEta;
-		}
 	}
 }
