@@ -1,6 +1,7 @@
-package base;
+package minimizers;
 import java.util.Arrays;
 
+import base.Array;
 import Jama.*;
 
 public class GP {

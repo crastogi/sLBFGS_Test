@@ -11,6 +11,7 @@ public class Array {
 		return output;
 	}
 	
+	// Add two arrays together
 	public static double[] add(double[] a, double[] b) {
 		if (a.length != b.length){
 			throw new IllegalArgumentException("Array lengths do not match.");
@@ -20,6 +21,20 @@ public class Array {
 		for (int i=0; i<a.length; i++) {
 			output[i] = a[i]+b[i];
 		}
+		return output;
+	}
+	
+	// Add two matrices together
+	public static double[][] add(double[][] a, double[][] b) {
+		int n = a.length, m = a[0].length;
+		double[][] output = new double[n][m];
+		
+		for(int i = 0; i < n; i++) {
+			for(int j = 0; j < m; j++) {
+				output[i][j] = a[i][j] + b[i][j];
+			}
+		}
+		
 		return output;
 	}
 	
@@ -204,6 +219,28 @@ public class Array {
 		return output;
 	}
 	
+	// Matrix Copy Range
+	public static double[][] copyOfRange(double[][] input, int i1Start, int i1End, int i2Start, int i2End) {
+		int d1         =input.length;
+		int d2         =input[0].length;
+		double[][] out = new double[d1][d2];
+		for(int i1=i1Start; i1<i1End; i1++){
+			for(int i2=i2Start; i2<i2End; i2++){
+				out[i1-i1Start][i2-i2Start] = input[i1][i2];
+			}
+		}
+		return out;
+	}
+	
+	public static boolean contains(double[] input, double value) {
+		for (double currVal : input) {
+			if (value==currVal) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	public static boolean containsTrue(boolean[] input) {
 		for (boolean currBool : input) {
 			if (currBool) {
@@ -265,6 +302,18 @@ public class Array {
 		}
 		return output;
 	}
+		
+	//Exponentiate every element in the matrix
+	public static double[][] exp(double[][] input) {
+		int d1=input.length, d2=input[0].length;
+		double[][] output = new double[d1][d2];
+		for (int i1 = 0; i1 < d1; i1++) {
+			for (int i2 = 0; i2 < d2; i2++) {
+				output[i1][i2] = Math.exp(input[i1][i2]);
+			}
+		}
+		return output;
+	}
 	
 	//Compute the frobenius norm of a matrix
 	public static double frobenius(double[][] input) {
@@ -303,8 +352,8 @@ public class Array {
 		}
 		return output;
 	}
-
-	// Multiply matrix by vector
+    
+    // Multiply matrix by vector
     public static double[] matrixVectorMultiply(double[][] m, double[] v) {
         if (m[0].length!=v.length) {
             throw new IllegalArgumentException("Matrix and vector dimensions do not agree!");
@@ -320,6 +369,17 @@ public class Array {
         return output;
     }
 	
+
+	// Returns array index containing the matching the input value 
+	public static int matchIdx(double[] input, double value) {
+		for (int i=0; i<input.length; i++) {
+			if (value==input[i]) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
 	//Return the maximum value of the array
 	public static double max(double[] input) {
 		double output = input[0];
@@ -382,16 +442,16 @@ public class Array {
 		return output;
 	}
 	
-    //Return the minimum value of the array
-    public static int min(int[] input) {
-        int output = input[0];
-        for (int i=1; i<input.length; i++) {
-            if (input[i] < output) {
-                output = input[i];
-            }
-        }
-        return output;
-    }
+	//Return the minimum value of the array
+	public static int min(int[] input) {
+		int output = input[0];
+		for (int i=1; i<input.length; i++) {
+			if (input[i] < output) {
+				output = input[i];
+			}
+		}
+		return output;
+	}
 	
 	public static double[] normalize(double[] input) {
 		double sum		= 0;
@@ -514,13 +574,13 @@ public class Array {
 		return output;
 	}
 	
-    public static double[] scalarMultiply(int[] input, double scalar) {
-        double[] output = new double[input.length];
-        for (int i=0; i<input.length; i++) {
-            output[i] = input[i]*scalar;
-        }
-        return output;
-    }
+	public static double[] scalarMultiply(int[] input, double scalar) {
+		double[] output = new double[input.length];
+		for (int i=0; i<input.length; i++) {
+			output[i] = input[i]*scalar;
+		}
+		return output;
+	}
 	
 	public static double[][] scalarMultiply(double[][] input, double scalar) {
 		double[][] output = new double[input.length][input[0].length];
@@ -533,6 +593,7 @@ public class Array {
 		return output;
 	}
 	
+	// Sum over all elements in array
 	public static double sum(double[] input) {
 		double output = 0;
 		for (int i=0; i<input.length; i++) {
@@ -541,6 +602,18 @@ public class Array {
 		return output;
 	}
 	
+	// Sum over all elements in matrix
+	public static double sum(double[][] input) {
+		double output = 0;
+		for (int i=0; i<input.length; i++) {
+			for (int j=0; j<input[i].length; j++) {
+				output += input[i][j];
+			}
+		}
+		return output;
+	}
+	
+	// Sum over all elements in array
 	public static double sum(int[] input) {
 		int output = 0;
 		for (int i=0; i<input.length; i++) {
@@ -609,7 +682,7 @@ public class Array {
 		}
 		return output;
 	}
-	
+		
 	// Compute variance
     public static double var(double[] input) {
         double sum = 0, sq = 0;
@@ -621,7 +694,7 @@ public class Array {
         
         return (input.length/(input.length-1)*(sq/input.length - sum*sum/(input.length*input.length)));
     }
-	
+    
 	//What is the largest element?
 	public static int whichMax(double[] input) {
 		double maxVal	= input[0];

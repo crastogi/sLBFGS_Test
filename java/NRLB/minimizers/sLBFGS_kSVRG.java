@@ -10,7 +10,7 @@ import base.*;
 public class sLBFGS_kSVRG extends Minimizer{
 	private boolean isVerbose;
 	private int k, d, N, bs, bH, currDepth, maxEpoch, memDepth, L, eIters;
-	private double eta, delta, epsilon, gradientNormBound = 2;
+	private double eta, delta, epsilon, gradientNormBound = 10;
 	private double fdHVPStepSize = 5E-3;
 	private double[] rho;
 	private double[][] s, y;
@@ -92,7 +92,7 @@ public class sLBFGS_kSVRG extends Minimizer{
 
 		//TODO:
 		double gNormMean = 0, egNormMean = 0, desiredNorm = 1;
-		double gDecayRate = .1;			// Decay rate for function gradient
+		double gDecayRate = 1;			// Decay rate for function gradient
 		double egDecayRate= .1;			// egNorm decay rate
 		PrintStream outputFile	= new PrintStream(new FileOutputStream("/Users/chaitanya/Documents/GitWorkspaces/slbfgs/java/output/RawPath_2.txt"));
 		PrintStream original	= System.out;
@@ -231,7 +231,7 @@ public class sLBFGS_kSVRG extends Minimizer{
 						desiredNorm = egNorm;
 					}
 					// Bound gradient update
-					desiredNorm = Math.min(desiredNorm, d*gradientNormBound);
+					desiredNorm = Math.min(desiredNorm, Math.sqrt(d)*gradientNormBound);
 					// Compute exponential moving average
 					egNormMean = egDecayRate*desiredNorm+(1-egDecayRate)*egNormMean;
 					divisor = egNorm/egNormMean;

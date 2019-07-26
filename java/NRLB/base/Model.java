@@ -615,9 +615,17 @@ public abstract class Model {
 	}
 	
 	public class CompactGradientOutput {
-		public double functionValue		= 0;
-		public double[] gradientVector;
+		public double functionValue = 0, varF = 0;
+		public double[] gradientVector, varDF;
 		public double[][] hessian;
+		
+		public CompactGradientOutput(double functionValue, double[] gradientVector,
+				double varF, double[] varDF) {
+			this.functionValue	= functionValue;
+			this.gradientVector	= gradientVector;
+			this.varF			= varF;
+			this.varDF			= varDF;
+		}
 
 		public CompactGradientOutput(double functionValue, double[] gradientVector) {
 			this.functionValue	= functionValue;
