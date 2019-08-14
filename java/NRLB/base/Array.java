@@ -162,6 +162,13 @@ public class Array {
 		return output;
 	}
 	
+	// Zeros out the input array
+	public static void clear(double[] in) {
+		for (int i=0; i<in.length; i++) {
+			in[i] = 0;
+		}
+	}
+	
 	//Array cloning routine **DEEP COPY ROUTINE
 	public static double[] clone(double[] js) {
 		double[] output = new double[js.length];

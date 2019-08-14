@@ -558,62 +558,63 @@ public class ScoringObject {
 	public double[] gradEval(long input) {
 		double[] kappas		= new double[totFrames];
 		double[] gradients	= new double[totFeatures];
+		double[] gradVar	= new double[totFeatures];
 		
 		if (type==0) {
 			for (int j=0; j<nModes; j++) {
 				sw[j].swNucleotide(input, kappas);
 			}
 			for (int j=0; j<nModes; j++) {						
-				sw[j].swGradNucleotide(input, 1, 1, kappas, gradients);
+				sw[j].swGradNucleotide(input, 1, 1, kappas, gradients, gradVar);
 			}
 		} else if(type==1) {
 			for (int j=0; j<nModes; j++) {
 				sw[j].swNucleotideDinucleotide(input, kappas);
 			}
 			for (int j=0; j<nModes; j++) {						
-				sw[j].swGradNucleotideDinucleotide(input, 1, 1, kappas, gradients);
+				sw[j].swGradNucleotideDinucleotide(input, 1, 1, kappas, gradients, gradVar);
 			}
 		} else if(type==2) {
 			for (int j=0; j<nModes; j++) {
 				sw[j].swNucleotideShape(input, kappas);
 			}
 			for (int j=0; j<nModes; j++) {						
-				sw[j].swGradNucleotideShape(input, 1, 1, kappas, gradients);
+				sw[j].swGradNucleotideShape(input, 1, 1, kappas, gradients, gradVar);
 			}
 		} else if(type==3){
 			for (int j=0; j<nModes; j++) {
 				sw[j].swNucleotideDinucleotideShape(input, kappas);
 			}
 			for (int j=0; j<nModes; j++) {						
-				sw[j].swGradNucleotideDinucleotideShape(input, 1, 1, kappas, gradients);
+				sw[j].swGradNucleotideDinucleotideShape(input, 1, 1, kappas, gradients, gradVar);
 			}
 		} else if(type==4){
 			for (int j=0; j<nModes; j++) {
 				sw[j].swNucleotideNoFlank(input, kappas);
 			}
 			for (int j=0; j<nModes; j++) {						
-				sw[j].swGradNucleotideNoFlank(input, 1, 1, kappas, gradients);
+				sw[j].swGradNucleotideNoFlank(input, 1, 1, kappas, gradients, gradVar);
 			}
 		} else if(type==5) {
 			for (int j=0; j<nModes; j++) {
 				sw[j].swNucleotideDinucleotideNoFlank(input, kappas);
 			}
 			for (int j=0; j<nModes; j++) {						
-				sw[j].swGradNucleotideDinucleotideNoFlank(input, 1, 1, kappas, gradients);
+				sw[j].swGradNucleotideDinucleotideNoFlank(input, 1, 1, kappas, gradients, gradVar);
 			}
 		} else if(type==6) {
 			for (int j=0; j<nModes; j++) {
 				sw[j].swNucleotideShapeNoFlank(input, kappas);
 			}
 			for (int j=0; j<nModes; j++) {						
-				sw[j].swGradNucleotideShapeNoFlank(input, 1, 1, kappas, gradients);
+				sw[j].swGradNucleotideShapeNoFlank(input, 1, 1, kappas, gradients, gradVar);
 			}
 		} else if(type==7) {
 			for (int j=0; j<nModes; j++) {
 				sw[j].swNucleotideDinucleotideShapeNoFlank(input, kappas);
 			}
 			for (int j=0; j<nModes; j++) {						
-				sw[j].swGradNucleotideDinucleotideShapeNoFlank(input, 1, 1, kappas, gradients);
+				sw[j].swGradNucleotideDinucleotideShapeNoFlank(input, 1, 1, kappas, gradients, gradVar);
 			}
 		}
 		return gradients;

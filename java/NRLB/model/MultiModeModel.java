@@ -519,10 +519,11 @@ public class MultiModeModel extends Model{
 		if (modeRegression) {
 			throw new Exception("Evaluation Failure! Cannot perform mode regression with stochastic evaluate...");
 		}
-		double functionValue;
+		double functionValue, funcVar, temp;
 		// TODO: keep values local for now!
 		double nsBindingGradient = 0;
 		double[] gradients = null;
+		double[] gradVar   = null;
 		Set<Callable<Double>> dpTasks = new HashSet<Callable<Double>>(nThreads);
 		CompactGradientOutput output;
 		
@@ -555,13 +556,26 @@ public class MultiModeModel extends Model{
 		// Update values
 		functionValue	-= output.functionValue;
 		gradients		= Array.subtract(gradients, output.gradientVector);
-		//Return to the original state
+		// Return to the original state
 		reverseBetas();			
 		gradients = reverseGradients(gradients);
-
-		//Adjust NSBinding gradient
-		if (isNSBinding)	gradients[totFeatures-1] *= nsBindingValue;
 		
+		// Compute function and gradient variance
+		funcVar			= (output.varF - output.functionValue*output.functionValue/currBatchSize)/(currBatchSize*(currBatchSize-1));
+		gradVar			= output.varDF;
+		for (int i=0; i<totFeatures-1; i++) {
+			gradVar[i]	-= output.gradientVector[i]*output.gradientVector[i]/currBatchSize;
+		}
+		
+		// Adjust NSBinding gradient
+		if (isNSBinding) {
+			gradients[totFeatures-1] *= nsBindingValue;
+			gradVar[totFeatures-1] *= nsBindingValue*nsBindingValue;
+		}
+		
+		// Adjust gradient vector
+		gradVar			= Array.scalarMultiply(gradVar, 1.0/(currBatchSize*(currBatchSize-1)));
+
 		// Adjust for L2 Penalty
 		functionValue	=  functionValue/currBatchSize + lambda*(1.0/((double) nCount))*Math.pow(Array.norm(getPositionVector()),2);
 		gradients		= Array.addScalarMultiply(Array.scalarMultiply(gradients, 1.0/((double) currBatchSize)), 2*lambda*(1.0/((double) nCount)), betas);
@@ -575,7 +589,7 @@ public class MultiModeModel extends Model{
 		dpTasks			= null;
 		
 		evaluatedDataPoints += currBatchSize;
-		return (new CompactGradientOutput(functionValue, gradients));
+		return (new CompactGradientOutput(functionValue, gradients, funcVar, gradVar));
 	}
 	
 	public CompactGradientOutput gradientEval() throws InterruptedException, ExecutionException {
@@ -1441,9 +1455,12 @@ public class MultiModeModel extends Model{
 	//TODO
 	//TODO
 	public CompactGradientOutput StochasticGradientEvaluator() {
-		double functionValue	= 0, sum = 0, nsGradient = 0;
+		double functionValue	= 0, sum = 0, nsGradient = 0, tempV, fv2 = 0;
+		double nsbGradVar1		= 0, nsbGradVar2 = 0;
 		double[] kappas			= new double[totalFrames];
 		double[] gradients		= new double[totFeatures];
+		double[] gradVar		= new double[totFeatures];
+		double[] tempVar		= new double[totFeatures];
 
 		if (type==0) {
 			for (int i=0; i<currBatchSize; i++) {
@@ -1454,11 +1471,21 @@ public class MultiModeModel extends Model{
 				for (int j=0; j<totalFrames; j++) {
 					sum += kappas[j];
 				}
-				functionValue	+= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
-				nsGradient		+= (1/sum-1/Z_FFM);
+				tempV			= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
+				functionValue	+= tempV;
+				fv2				+= tempV*tempV;
+				tempV			= 1/sum;
+				nsGradient		+= (tempV-1/Z_FFM);
+				nsbGradVar1		+= tempV;
+				nsbGradVar2		+= tempV*tempV;
+				Array.clear(tempVar);
 				for (int j=0; j<nModes; j++) {						
 					modes.get(j).swGradNucleotide(R1FProbes[currBatchIdx[i]], 
-							1, sum, kappas, gradients);
+							1, sum, kappas, gradients, tempVar);
+				}
+				// Update Gradient Variance
+				for (int j=0; j<totFeatures-1; j++) {
+					gradVar[j] += tempVar[j]*tempVar[j];
 				}
 			}
 		} else if(type==1) {
@@ -1470,11 +1497,21 @@ public class MultiModeModel extends Model{
 				for (int j=0; j<totalFrames; j++) {
 					sum += kappas[j];
 				}
-				functionValue	+= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
-				nsGradient		+= (1/sum-1/Z_FFM);
+				tempV			= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
+				functionValue	+= tempV;
+				fv2				+= tempV*tempV;
+				tempV			= 1/sum;
+				nsGradient		+= (tempV-1/Z_FFM);
+				nsbGradVar1		+= tempV;
+				nsbGradVar2		+= tempV*tempV;
+				Array.clear(tempVar);
 				for (int j=0; j<nModes; j++) {						
 					modes.get(j).swGradNucleotideDinucleotide(R1FProbes[currBatchIdx[i]], 
-							1, sum, kappas, gradients);
+							1, sum, kappas, gradients, tempVar);
+				}
+				// Update Gradient Variance
+				for (int j=0; j<totFeatures-1; j++) {
+					gradVar[j] += tempVar[j]*tempVar[j];
 				}
 			}
 		} else if(type==2) {
@@ -1486,11 +1523,21 @@ public class MultiModeModel extends Model{
 				for (int j=0; j<totalFrames; j++) {
 					sum += kappas[j];
 				}
-				functionValue	+= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
-				nsGradient		+= (1/sum-1/Z_FFM);
+				tempV			= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
+				functionValue	+= tempV;
+				fv2				+= tempV*tempV;
+				tempV			= 1/sum;
+				nsGradient		+= (tempV-1/Z_FFM);
+				nsbGradVar1		+= tempV;
+				nsbGradVar2		+= tempV*tempV;
+				Array.clear(tempVar);
 				for (int j=0; j<nModes; j++) {						
 					modes.get(j).swGradNucleotideShape(R1FProbes[currBatchIdx[i]], 
-							1, sum, kappas, gradients);
+							1, sum, kappas, gradients, tempVar);
+				}
+				// Update Gradient Variance
+				for (int j=0; j<totFeatures-1; j++) {
+					gradVar[j] += tempVar[j]*tempVar[j];
 				}
 			}
 		} else if(type==3){
@@ -1502,11 +1549,21 @@ public class MultiModeModel extends Model{
 				for (int j=0; j<totalFrames; j++) {
 					sum += kappas[j];
 				}
-				functionValue	+= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
-				nsGradient		+= (1/sum-1/Z_FFM);
+				tempV			= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
+				functionValue	+= tempV;
+				fv2				+= tempV*tempV;
+				tempV			= 1/sum;
+				nsGradient		+= (tempV-1/Z_FFM);
+				nsbGradVar1		+= tempV;
+				nsbGradVar2		+= tempV*tempV;
+				Array.clear(tempVar);
 				for (int j=0; j<nModes; j++) {						
 					modes.get(j).swGradNucleotideDinucleotideShape(R1FProbes[currBatchIdx[i]], 
-							1, sum, kappas, gradients);
+							1, sum, kappas, gradients, tempVar);
+				}
+				// Update Gradient Variance
+				for (int j=0; j<totFeatures-1; j++) {
+					gradVar[j] += tempVar[j]*tempVar[j];
 				}
 			}
 		} else if(type==4){
@@ -1518,11 +1575,21 @@ public class MultiModeModel extends Model{
 				for (int j=0; j<totalFrames; j++) {
 					sum += kappas[j];
 				}
-				functionValue	+= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
-				nsGradient		+= (1/sum-1/Z_FFM);
+				tempV			= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
+				functionValue	+= tempV;
+				fv2				+= tempV*tempV;
+				tempV			= 1/sum;
+				nsGradient		+= (tempV-1/Z_FFM);
+				nsbGradVar1		+= tempV;
+				nsbGradVar2		+= tempV*tempV;
+				Array.clear(tempVar);
 				for (int j=0; j<nModes; j++) {						
 					modes.get(j).swGradNucleotideNoFlank(R1FProbes[currBatchIdx[i]], 
-							1, sum, kappas, gradients);
+							1, sum, kappas, gradients, tempVar);
+				}
+				// Update Gradient Variance
+				for (int j=0; j<totFeatures-1; j++) {
+					gradVar[j] += tempVar[j]*tempVar[j];
 				}
 			}
 		} else if(type==5) {
@@ -1534,11 +1601,21 @@ public class MultiModeModel extends Model{
 				for (int j=0; j<totalFrames; j++) {
 					sum += kappas[j];
 				}
-				functionValue	+= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
-				nsGradient		+= (1/sum-1/Z_FFM);
+				tempV			= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
+				functionValue	+= tempV;
+				fv2				+= tempV*tempV;
+				tempV			= 1/sum;
+				nsGradient		+= (tempV-1/Z_FFM);
+				nsbGradVar1		+= tempV;
+				nsbGradVar2		+= tempV*tempV;
+				Array.clear(tempVar);
 				for (int j=0; j<nModes; j++) {						
 					modes.get(j).swGradNucleotideDinucleotideNoFlank(R1FProbes[currBatchIdx[i]], 
-							1, sum, kappas, gradients);
+							1, sum, kappas, gradients, tempVar);
+				}
+				// Update Gradient Variance
+				for (int j=0; j<totFeatures-1; j++) {
+					gradVar[j] += tempVar[j]*tempVar[j];
 				}
 			}
 		} else if(type==6) {
@@ -1550,11 +1627,21 @@ public class MultiModeModel extends Model{
 				for (int j=0; j<totalFrames; j++) {
 					sum += kappas[j];
 				}
-				functionValue	+= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
-				nsGradient		+= (1/sum-1/Z_FFM);
+				tempV			= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
+				functionValue	+= tempV;
+				fv2				+= tempV*tempV;
+				tempV			= 1/sum;
+				nsGradient		+= (tempV-1/Z_FFM);
+				nsbGradVar1		+= tempV;
+				nsbGradVar2		+= tempV*tempV;
+				Array.clear(tempVar);
 				for (int j=0; j<nModes; j++) {						
 					modes.get(j).swGradNucleotideShapeNoFlank(R1FProbes[currBatchIdx[i]], 
-							1, sum, kappas, gradients);
+							1, sum, kappas, gradients, tempVar);
+				}
+				// Update Gradient Variance
+				for (int j=0; j<totFeatures-1; j++) {
+					gradVar[j] += tempVar[j]*tempVar[j];
 				}
 			}
 		} else if(type==7) {
@@ -1566,17 +1653,30 @@ public class MultiModeModel extends Model{
 				for (int j=0; j<totalFrames; j++) {
 					sum += kappas[j];
 				}
-				functionValue	+= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
-				nsGradient		+= (1/sum-1/Z_FFM);
+				tempV			= Math.log(R1R0FProb[currBatchIdx[i]]*sum);
+				functionValue	+= tempV;
+				fv2				+= tempV*tempV;
+				tempV			= 1/sum;
+				nsGradient		+= (tempV-1/Z_FFM);
+				nsbGradVar1		+= tempV;
+				nsbGradVar2		+= tempV*tempV;
+				Array.clear(tempVar);
 				for (int j=0; j<nModes; j++) {						
 					modes.get(j).swGradNucleotideDinucleotideShapeNoFlank(R1FProbes[currBatchIdx[i]], 
-							1, sum, kappas, gradients);
+							1, sum, kappas, gradients, gradVar);
+				}
+				// Update Gradient Variance
+				for (int j=0; j<totFeatures-1; j++) {
+					gradVar[j] += tempVar[j]*tempVar[j];
 				}
 			}
 		}
-		if (isNSBinding)	gradients[totFeatures-1] = nsGradient;
+		if (isNSBinding) {
+			gradients[totFeatures-1] = nsGradient;
+			gradVar[totFeatures-1] = nsbGradVar2-nsbGradVar1*nsbGradVar1/currBatchSize;
+		}
 		
-		return (new CompactGradientOutput(functionValue, gradients));
+		return (new CompactGradientOutput(functionValue, gradients, fv2, gradVar));
 	}
 	
 	public class ThreadedGradientEvaluator implements Callable<CompactGradientOutput>{
@@ -1593,6 +1693,7 @@ public class MultiModeModel extends Model{
 			double functionValue	= 0, sum = 0, nsGradient = 0;
 			double[] kappas			= new double[totalFrames];
 			double[] gradients		= new double[totFeatures];
+			double[] gradVar		= new double[totFeatures];
 
 			if (type==0) {
 				for (int i=startIdx; i<endIdx; i++) {
@@ -1607,7 +1708,7 @@ public class MultiModeModel extends Model{
 					nsGradient		+= R1Counts[i]*(1/sum-1/Z_FFM);
 					for (int j=0; j<nModes; j++) {						
 						modes.get(j).swGradNucleotide(R1Probes[i], 
-								R1Counts[i], sum, kappas, gradients);
+								R1Counts[i], sum, kappas, gradients, gradVar);
 					}
 				}
 			} else if(type==1) {
@@ -1623,7 +1724,7 @@ public class MultiModeModel extends Model{
 					nsGradient		+= R1Counts[i]*(1/sum-1/Z_FFM);
 					for (int j=0; j<nModes; j++) {						
 						modes.get(j).swGradNucleotideDinucleotide(R1Probes[i], 
-								R1Counts[i], sum, kappas, gradients);
+								R1Counts[i], sum, kappas, gradients, gradVar);
 					}
 				}
 			} else if(type==2) {
@@ -1639,7 +1740,7 @@ public class MultiModeModel extends Model{
 					nsGradient		+= R1Counts[i]*(1/sum-1/Z_FFM);
 					for (int j=0; j<nModes; j++) {						
 						modes.get(j).swGradNucleotideShape(R1Probes[i], 
-								R1Counts[i], sum, kappas, gradients);
+								R1Counts[i], sum, kappas, gradients, gradVar);
 					}
 				}
 			} else if(type==3){
@@ -1655,7 +1756,7 @@ public class MultiModeModel extends Model{
 					nsGradient		+= R1Counts[i]*(1/sum-1/Z_FFM);
 					for (int j=0; j<nModes; j++) {						
 						modes.get(j).swGradNucleotideDinucleotideShape(R1Probes[i], 
-								R1Counts[i], sum, kappas, gradients);
+								R1Counts[i], sum, kappas, gradients, gradVar);
 					}
 				}
 			} else if(type==4){
@@ -1671,7 +1772,7 @@ public class MultiModeModel extends Model{
 					nsGradient		+= R1Counts[i]*(1/sum-1/Z_FFM);
 					for (int j=0; j<nModes; j++) {						
 						modes.get(j).swGradNucleotideNoFlank(R1Probes[i], 
-								R1Counts[i], sum, kappas, gradients);
+								R1Counts[i], sum, kappas, gradients, gradVar);
 					}
 				}
 			} else if(type==5) {
@@ -1687,7 +1788,7 @@ public class MultiModeModel extends Model{
 					nsGradient		+= R1Counts[i]*(1/sum-1/Z_FFM);
 					for (int j=0; j<nModes; j++) {						
 						modes.get(j).swGradNucleotideDinucleotideNoFlank(R1Probes[i], 
-								R1Counts[i], sum, kappas, gradients);
+								R1Counts[i], sum, kappas, gradients, gradVar);
 					}
 				}
 			} else if(type==6) {
@@ -1703,7 +1804,7 @@ public class MultiModeModel extends Model{
 					nsGradient		+= R1Counts[i]*(1/sum-1/Z_FFM);
 					for (int j=0; j<nModes; j++) {						
 						modes.get(j).swGradNucleotideShapeNoFlank(R1Probes[i], 
-								R1Counts[i], sum, kappas, gradients);
+								R1Counts[i], sum, kappas, gradients, gradVar);
 					}
 				}
 			} else if(type==7) {
@@ -1719,7 +1820,7 @@ public class MultiModeModel extends Model{
 					nsGradient		+= R1Counts[i]*(1/sum-1/Z_FFM);
 					for (int j=0; j<nModes; j++) {						
 						modes.get(j).swGradNucleotideDinucleotideShapeNoFlank(R1Probes[i], 
-								R1Counts[i], sum, kappas, gradients);
+								R1Counts[i], sum, kappas, gradients, gradVar);
 					}
 				}
 			}

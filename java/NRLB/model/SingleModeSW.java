@@ -193,7 +193,7 @@ public class SingleModeSW{
 		}
 	}
 	
-	public void swGradNucleotide(long input, int ki, double totalSum, double[] kappas, double[] gradients) {
+	public void swGradNucleotide(long input, int ki, double totalSum, double[] kappas, double[] gradients, double[] inputVar) {
 		double fSubSum, rSubSum;
 		long forwardSubString, reverseSubString;
 		long fwdStrand			= fFlankingSequence | (input << 2*flankLength);
@@ -209,7 +209,9 @@ public class SingleModeSW{
 			rSubSum = ki*kappas[frameOffset+2*j+1]/totalSum;
 			for (int loc=0; loc<k; loc++) {
 				gradients[baseOffset+loc*4+((int) (forwardSubString&3))] += fSubSum;
+				inputVar[baseOffset+loc*4+((int) (forwardSubString&3))] += fSubSum;
 				gradients[baseOffset+loc*4+((int) (reverseSubString&3))] += rSubSum;
+				inputVar[baseOffset+loc*4+((int) (reverseSubString&3))] += rSubSum;
 				forwardSubString >>= 2;
 				reverseSubString >>= 2;
 			}
@@ -278,7 +280,7 @@ public class SingleModeSW{
 		}
 	}
 	
-	public void swGradNucleotideNoFlank(long input, int ki, double totalSum, double[] kappas, double[] gradients) {
+	public void swGradNucleotideNoFlank(long input, int ki, double totalSum, double[] kappas, double[] gradients, double[] inputVar) {
 		double fSubSum, rSubSum;
 		long forwardSubString, reverseSubString;
 		long fwdStrand			= input;
@@ -294,7 +296,9 @@ public class SingleModeSW{
 			rSubSum = ki*kappas[frameOffset+2*j+1]/totalSum;
 			for (int loc=0; loc<k; loc++) {
 				gradients[baseOffset+loc*4+((int) (forwardSubString&3))] += fSubSum;
+				inputVar[baseOffset+loc*4+((int) (forwardSubString&3))] += fSubSum;
 				gradients[baseOffset+loc*4+((int) (reverseSubString&3))] += rSubSum;
+				inputVar[baseOffset+loc*4+((int) (reverseSubString&3))] += rSubSum;
 				forwardSubString >>= 2;
 				reverseSubString >>= 2;
 			}
@@ -367,7 +371,7 @@ public class SingleModeSW{
 		}
 	}
 	
-	public void swGradNucleotideDinucleotide(long input, int ki, double totalSum, double[] kappas, double[] gradients) {
+	public void swGradNucleotideDinucleotide(long input, int ki, double totalSum, double[] kappas, double[] gradients, double[] inputVar) {
 		double fSubSum, rSubSum;
 		long forwardSubString, reverseSubString;
 		long fwdStrand			= fFlankingSequence | (input << 2*flankLength);
@@ -383,14 +387,20 @@ public class SingleModeSW{
 			rSubSum = ki*kappas[frameOffset+2*j+1]/totalSum;
 			for (int loc=0; loc<k-1; loc++) {
 				gradients[baseOffset+loc*4+((int) (forwardSubString&3))] += fSubSum;
+				inputVar[baseOffset+loc*4+((int) (forwardSubString&3))] += fSubSum;
 				gradients[baseOffset+loc*4+((int) (reverseSubString&3))] += rSubSum;
+				inputVar[baseOffset+loc*4+((int) (reverseSubString&3))] += rSubSum;
 				gradients[nucOffset+loc*16+((int) (forwardSubString&15))] += fSubSum;
+				inputVar[nucOffset+loc*16+((int) (forwardSubString&15))] += fSubSum;
 				gradients[nucOffset+loc*16+((int) (reverseSubString&15))] += rSubSum;
+				inputVar[nucOffset+loc*16+((int) (reverseSubString&15))] += rSubSum;
 				forwardSubString >>= 2;
 				reverseSubString >>= 2;
 			}
 			gradients[baseOffset+(k-1)*4+((int) (forwardSubString&3))] += fSubSum;
+			inputVar[baseOffset+(k-1)*4+((int) (forwardSubString&3))] += fSubSum;
 			gradients[baseOffset+(k-1)*4+((int) (reverseSubString&3))] += rSubSum;
+			inputVar[baseOffset+(k-1)*4+((int) (reverseSubString&3))] += rSubSum;
 			forwardStrand >>= 2;
 			reverseStrand >>= 2;
 		}
@@ -490,7 +500,7 @@ public class SingleModeSW{
 		}
 	}
 	
-	public void swGradNucleotideDinucleotideNoFlank(long input, int ki, double totalSum, double[] kappas, double[] gradients) {
+	public void swGradNucleotideDinucleotideNoFlank(long input, int ki, double totalSum, double[] kappas, double[] gradients, double[] inputVar) {
 		double fSubSum, rSubSum;
 		long forwardSubString, reverseSubString;
 		long fwdStrand			= input;
@@ -506,14 +516,20 @@ public class SingleModeSW{
 			rSubSum = ki*kappas[frameOffset+2*j+1]/totalSum;
 			for (int loc=0; loc<k-1; loc++) {
 				gradients[baseOffset+loc*4+((int) (forwardSubString&3))] += fSubSum;
+				inputVar[baseOffset+loc*4+((int) (forwardSubString&3))] += fSubSum;
 				gradients[baseOffset+loc*4+((int) (reverseSubString&3))] += rSubSum;
+				inputVar[baseOffset+loc*4+((int) (reverseSubString&3))] += rSubSum;
 				gradients[nucOffset+loc*16+((int) (forwardSubString&15))] += fSubSum;
+				inputVar[nucOffset+loc*16+((int) (forwardSubString&15))] += fSubSum;
 				gradients[nucOffset+loc*16+((int) (reverseSubString&15))] += rSubSum;
+				inputVar[nucOffset+loc*16+((int) (reverseSubString&15))] += rSubSum;
 				forwardSubString >>= 2;
 				reverseSubString >>= 2;
 			}
 			gradients[baseOffset+(k-1)*4+((int) (forwardSubString&3))] += fSubSum;
+			inputVar[baseOffset+(k-1)*4+((int) (forwardSubString&3))] += fSubSum;
 			gradients[baseOffset+(k-1)*4+((int) (reverseSubString&3))] += rSubSum;
+			inputVar[baseOffset+(k-1)*4+((int) (reverseSubString&3))] += rSubSum;
 			forwardStrand >>= 2;
 			reverseStrand >>= 2;
 		}
@@ -624,7 +640,7 @@ public class SingleModeSW{
 		}
 	}
 	
-	public void swGradNucleotideShape(long input, int ki, double totalSum, double[] kappas, double[] gradients) {
+	public void swGradNucleotideShape(long input, int ki, double totalSum, double[] kappas, double[] gradients, double[] inputVar) {
 		int fShapeIdx, rShapeIdx;
 		double fSubSum, rSubSum;
 		long fSubString, rSubString, fShapeSubString, rShapeSubString;
@@ -647,12 +663,16 @@ public class SingleModeSW{
 			rSubSum = ki*kappas[frameOffset+2*j+1]/totalSum;
 			for (int loc=0; loc<k; loc++) {
 				gradients[baseOffset+loc*4+((int) (fSubString&3))] += fSubSum;
+				inputVar[baseOffset+loc*4+((int) (fSubString&3))] += fSubSum;
 				gradients[baseOffset+loc*4+((int) (rSubString&3))] += rSubSum;
+				inputVar[baseOffset+loc*4+((int) (rSubString&3))] += rSubSum;
 				fShapeIdx = (int) (fShapeSubString & 1023);
 				rShapeIdx = (int) (rShapeSubString & 1023);
 				for (int currShapeFeature=0; currShapeFeature<nShapeClasses; currShapeFeature++) {
 					gradients[nucOffset+loc*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
+					inputVar[nucOffset+loc*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
 					gradients[nucOffset+loc*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
+					inputVar[nucOffset+loc*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
 				}
 				fSubString >>= 2;
 				rSubString >>= 2;
@@ -780,7 +800,7 @@ public class SingleModeSW{
 		}
 	}
 	
-	public void swGradNucleotideShapeNoFlank(long input, int ki, double totalSum, double[] kappas, double[] gradients) {
+	public void swGradNucleotideShapeNoFlank(long input, int ki, double totalSum, double[] kappas, double[] gradients, double[] inputVar) {
 		int fShapeIdx, rShapeIdx;
 		double fSubSum, rSubSum;
 		long fSubString, rSubString, fShapeSubString, rShapeSubString;
@@ -803,12 +823,16 @@ public class SingleModeSW{
 			rSubSum = ki*kappas[frameOffset+2*j+1]/totalSum;
 			for (int loc=0; loc<k; loc++) {
 				gradients[baseOffset+loc*4+((int) (fSubString&3))] += fSubSum;
+				inputVar[baseOffset+loc*4+((int) (fSubString&3))] += fSubSum;
 				gradients[baseOffset+loc*4+((int) (rSubString&3))] += rSubSum;
+				inputVar[baseOffset+loc*4+((int) (rSubString&3))] += rSubSum;
 				fShapeIdx = (int) (fShapeSubString & 1023);
 				rShapeIdx = (int) (rShapeSubString & 1023);
 				for (int currShapeFeature=0; currShapeFeature<nShapeClasses; currShapeFeature++) {
 					gradients[nucOffset+loc*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
+					inputVar[nucOffset+loc*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
 					gradients[nucOffset+loc*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
+					inputVar[nucOffset+loc*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
 				}
 				fSubString >>= 2;
 				rSubString >>= 2;
@@ -946,7 +970,7 @@ public class SingleModeSW{
 		}
 	}
 	
-	public void swGradNucleotideDinucleotideShape(long input, int ki, double totalSum, double[] kappas, double[] gradients) {
+	public void swGradNucleotideDinucleotideShape(long input, int ki, double totalSum, double[] kappas, double[] gradients, double[] inputVar) {
 		int fShapeIdx, rShapeIdx;
 		double fSubSum, rSubSum;
 		long fSubString, rSubString, fShapeSubString, rShapeSubString;
@@ -969,14 +993,20 @@ public class SingleModeSW{
 			rSubSum = ki*kappas[frameOffset+2*j+1]/totalSum;
 			for (int loc=0; loc<k-1; loc++) {
 				gradients[baseOffset+loc*4+((int) (fSubString&3))] += fSubSum;
+				inputVar[baseOffset+loc*4+((int) (fSubString&3))] += fSubSum;
 				gradients[baseOffset+loc*4+((int) (rSubString&3))] += rSubSum;
+				inputVar[baseOffset+loc*4+((int) (rSubString&3))] += rSubSum;
 				gradients[nucOffset+loc*16+((int) (fSubString&15))] += fSubSum;
+				inputVar[nucOffset+loc*16+((int) (fSubString&15))] += fSubSum;
 				gradients[nucOffset+loc*16+((int) (rSubString&15))] += rSubSum;
+				inputVar[nucOffset+loc*16+((int) (rSubString&15))] += rSubSum;
 				fShapeIdx = (int) (fShapeSubString & 1023);
 				rShapeIdx = (int) (rShapeSubString & 1023);
 				for (int currShapeFeature=0; currShapeFeature<nShapeClasses; currShapeFeature++) {
 					gradients[dinucOffset+loc*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
+					inputVar[dinucOffset+loc*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
 					gradients[dinucOffset+loc*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
+					inputVar[dinucOffset+loc*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
 				}
 				fSubString >>= 2;
 				rSubString >>= 2;
@@ -984,12 +1014,16 @@ public class SingleModeSW{
 				rShapeSubString >>= 2;
 			}
 			gradients[baseOffset+(k-1)*4+((int) (fSubString&3))] += fSubSum;
+			inputVar[baseOffset+(k-1)*4+((int) (fSubString&3))] += fSubSum;
 			gradients[baseOffset+(k-1)*4+((int) (rSubString&3))] += rSubSum;
+			inputVar[baseOffset+(k-1)*4+((int) (rSubString&3))] += rSubSum;
 			fShapeIdx = (int) (fShapeSubString & 1023);
 			rShapeIdx = (int) (rShapeSubString & 1023);
 			for (int currShapeFeature=0; currShapeFeature<nShapeClasses; currShapeFeature++) {
 				gradients[dinucOffset+(k-1)*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
+				inputVar[dinucOffset+(k-1)*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
 				gradients[dinucOffset+(k-1)*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
+				inputVar[dinucOffset+(k-1)*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
 			}
 			
 			forwardStrand >>= 2;
@@ -1151,7 +1185,7 @@ public class SingleModeSW{
 		}
 	}
 	
-	public void swGradNucleotideDinucleotideShapeNoFlank(long input, int ki, double totalSum, double[] kappas, double[] gradients) {
+	public void swGradNucleotideDinucleotideShapeNoFlank(long input, int ki, double totalSum, double[] kappas, double[] gradients, double[] inputVar) {
 		int fShapeIdx, rShapeIdx;
 		double fSubSum, rSubSum;
 		long fSubString, rSubString, fShapeSubString, rShapeSubString;
@@ -1174,14 +1208,20 @@ public class SingleModeSW{
 			rSubSum = ki*kappas[frameOffset+2*j+1]/totalSum;
 			for (int loc=0; loc<k-1; loc++) {
 				gradients[baseOffset+loc*4+((int) (fSubString&3))] += fSubSum;
+				inputVar[baseOffset+loc*4+((int) (fSubString&3))] += fSubSum;
 				gradients[baseOffset+loc*4+((int) (rSubString&3))] += rSubSum;
+				inputVar[baseOffset+loc*4+((int) (rSubString&3))] += rSubSum;
 				gradients[nucOffset+loc*16+((int) (fSubString&15))] += fSubSum;
+				inputVar[nucOffset+loc*16+((int) (fSubString&15))] += fSubSum;
 				gradients[nucOffset+loc*16+((int) (rSubString&15))] += rSubSum;
+				inputVar[nucOffset+loc*16+((int) (rSubString&15))] += rSubSum;
 				fShapeIdx = (int) (fShapeSubString & 1023);
 				rShapeIdx = (int) (rShapeSubString & 1023);
 				for (int currShapeFeature=0; currShapeFeature<nShapeClasses; currShapeFeature++) {
 					gradients[dinucOffset+loc*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
+					inputVar[dinucOffset+loc*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
 					gradients[dinucOffset+loc*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
+					inputVar[dinucOffset+loc*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
 				}
 				fSubString >>= 2;
 				rSubString >>= 2;
@@ -1189,12 +1229,16 @@ public class SingleModeSW{
 				rShapeSubString >>= 2;
 			}
 			gradients[baseOffset+(k-1)*4+((int) (fSubString&3))] += fSubSum;
+			inputVar[baseOffset+(k-1)*4+((int) (fSubString&3))] += fSubSum;
 			gradients[baseOffset+(k-1)*4+((int) (rSubString&3))] += rSubSum;
+			inputVar[baseOffset+(k-1)*4+((int) (rSubString&3))] += rSubSum;
 			fShapeIdx = (int) (fShapeSubString & 1023);
 			rShapeIdx = (int) (rShapeSubString & 1023);
 			for (int currShapeFeature=0; currShapeFeature<nShapeClasses; currShapeFeature++) {
 				gradients[dinucOffset+(k-1)*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
+				inputVar[dinucOffset+(k-1)*nShapeClasses + currShapeFeature] += fSubSum*shapeFeatures[fShapeIdx][currShapeFeature];
 				gradients[dinucOffset+(k-1)*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
+				inputVar[dinucOffset+(k-1)*nShapeClasses + currShapeFeature] += rSubSum*shapeFeatures[rShapeIdx][currShapeFeature];
 			}
 			
 			forwardStrand >>= 2;

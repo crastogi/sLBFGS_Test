@@ -117,25 +117,21 @@ public class GP {
 	    Vd0  = Vd(0.);
 	    dVd0 = dVd(0.);
 	    
-	    System.out.println("N:\t"+N);
-	    System.out.print("T:\t");
-	    Array.print(T);
-	    System.out.print("Y:\t");
-	    Array.print(Y);
-	    System.out.print("dYproj:\t");
-	    Array.print(dY_projected);
-	    System.out.println("sigmaf:\t"+sigmaf);
-	    System.out.println("sigmadf:\t"+sigmadf);
-	    System.out.println("m0:\t"+m(0));
-	    System.out.println("d1m:\t"+d1m(0));
-	    for (int i=0; i<N; i++) {
-	    	System.out.print(probWolfe(i)+"\t");
-	    }
-	    System.out.print("\n");
-	    
-	    if (N==4) {
-	    	System.out.println("poopie");
-	    }
+//	    System.out.println("N:\t"+N);
+//	    System.out.print("T:\t");
+//	    Array.print(T);
+//	    System.out.print("Y:\t");
+//	    Array.print(Y);
+//	    System.out.print("dYproj:\t");
+//	    Array.print(dY_projected);
+//	    System.out.println("sigmaf:\t"+sigmaf);
+//	    System.out.println("sigmadf:\t"+sigmadf);
+//	    System.out.println("m0:\t"+m(0));
+//	    System.out.println("d1m:\t"+d1m(0));
+//	    for (int i=0; i<N; i++) {
+//	    	System.out.print(probWolfe(i)+"\t");
+//	    }
+//	    System.out.print("\n");
 	}
 
 	public double k(double a, double b) {

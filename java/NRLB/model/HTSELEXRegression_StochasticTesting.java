@@ -824,9 +824,10 @@ public class HTSELEXRegression_StochasticTesting {
 	private static Minimizer newMinimizer(Model model) {
 //		return new LBFGS(model, lbfgsMem, lbfgsConvergence, lbfgsMaxIters, true, errorBars, storeHessian, isVerbose);
 //		return new sLBFGS(model, 20, 5000, 200, 1000, 20, 400, .005, 1E-7, 0, isVerbose);
-//		return new sLBFGS(model, 500, 5000, 200, 1000, 10, 200, .02, 1E-7, 0, isVerbose);
+//		return new sLBFGS(model, 500, 5000, 50, 1000, 20, 200, .03, 1E-7, 0, isVerbose);
+		return new sLBFGS_PLS(model, 500, 5000, 50, 1000, 20, 200, .03, 1E-7, 0, isVerbose);
 		//return new kSVRG(model, 10, true, true, 50, 1000, .01, lbfgsConvergence, false, isVerbose);
-		return new sLBFGS_kSVRG(model, 5, 1000, 5000, 1000, 10, 50, .03, 1E-7, 0, isVerbose);
+//		return new sLBFGS_kSVRG(model, 5, 500, 5000, 1000, 20, 50, .03, 1E-7, 0, isVerbose);
 //		return new sLBFGS_kSVRG(model, 10, 500, 2500, 1000, 5, 200, .02, lbfgsConvergence, 1E-4, isVerbose);
 //		return new sLBFGS_kSVRG_V2(model, 10, 500, 5000, 1000, 10, 80, .01, lbfgsConvergence, 0, isVerbose);
 //		return new sLBFGS_kSVRG_V2(model, 5, 5, 10, 1000, 10, 80, .005, lbfgsConvergence, 0, isVerbose);

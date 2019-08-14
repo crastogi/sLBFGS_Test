@@ -272,6 +272,8 @@ while true
                 % Set new tt to be the average between it and the point
                 % right of it
                 tt = (T_sorted(T_idx)+T_sorted(T_idx+1))/2;
+                
+                error('poop');
             end
         end
     catch mcsearch_error

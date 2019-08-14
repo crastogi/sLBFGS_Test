@@ -864,7 +864,7 @@ public class HTSELEXRegression {
 				//First entry is the sequence
 				currSeq = new Sequence(temp[0], 0, l);
 				//Get Round 0 Count;
-				currCount = Integer.parseInt(temp[1]);
+				currCount = Integer.parseInt(temp[2]);
 				if (currCount>0) {
 					if (generator.nextBoolean()) {
 						trainSeq.add(currSeq);
@@ -939,7 +939,7 @@ public class HTSELEXRegression {
 				//First entry is the sequence
 				currSeq = new Sequence(temp[0], 0, l);
 				//Get Round 1 Count;
-				currCount = Integer.parseInt(temp[round+1]);
+				currCount = Integer.parseInt(temp[round+2]);
 				if (currCount>0) {
 					trainProbes.add(currSeq.getValue());
 					trainCounts.add(currCount);							

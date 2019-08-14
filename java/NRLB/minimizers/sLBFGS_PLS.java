@@ -16,8 +16,8 @@ public class sLBFGS_PLS extends Minimizer{
 	private double alphaMin, alphaMax, alphaL, fL, gL, fT, gT, alphaU, fU, gU;
 	private double fFull, effEtaMean;
 	// constants for Wolfe conditions (must be chosen 0 < c1 < c2 < 1)
-	private double c1 = .15;
-	private double c2 = .85;
+	private double c1 = .0001;
+	private double c2 = .9;
 	private double stepAlphaMin = 1e-20;
 	private double stepAlphaMax = 1e20;
 	private double uTol			= 1e-10;
@@ -189,6 +189,9 @@ public class sLBFGS_PLS extends Minimizer{
 					}
 					// TODO: How do we deal with divisor?
 					plsOut = probLineSearch(x_t, f_t, v_t, f_xt.varF, f_xt.varDF, effEta/divisor, Array.scalarMultiply(effGrad, -1.0));
+					
+					System.out.println("completed individual step");
+					
 					firstEval = false;
 					continue;
 				}
@@ -229,6 +232,10 @@ public class sLBFGS_PLS extends Minimizer{
 				divisor = egNorm/egNormMean;
 				x_t = Array.addScalarMultiply(x_t, -eta/divisor, effGrad);
 				
+				if (t>2) {
+					throw new Exception("POOOOOP");
+				}
+				
 				//TODO
 //				System.out.println("New Iterate=========");
 //				Array.print(x_t);
@@ -237,11 +244,16 @@ public class sLBFGS_PLS extends Minimizer{
 //				System.out.println("Divisor: "+divisor+"; egNorm: "+egNorm);
 				plsOut = probLineSearch(x_t, f_t, v_t, plsOut.varF, plsOut.varDF, effEta/divisor, Array.scalarMultiply(effGrad, -1.0));
 				
+				System.out.println("completed individual step");
+				
                 //TODO:
 				String hessUpdate="";
                 
 				// Check to see if L iterations have passed (triggers hessian update)
 				if (t % L == 0) {
+					
+					System.out.println("Hessian update");
+					
 					// Increment the number of hessian correction pairs
 					r++;
 					// Finish computing u_r

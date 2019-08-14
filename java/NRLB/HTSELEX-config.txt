@@ -8,7 +8,7 @@ lbfgsconvergence	= 1E-7 //5E-6				//	Convergence criteria
 //	INPUT DATA:
 //**************
 dataDir				= /Users/chaitanya/Documents/Research/SELEX/MultinomialPaper/ModelComparisons/DeepBind/AUROC/HT-SELEX Data/
-experimentName		= RFX5_TGGAGC30NGAT_AI_sTest
+experimentName		= RFX5_TGGAGC30NGAT_AI
 l					= 30
 lflank				= ATCTGGAGC
 rflank				= GATATCGTA
@@ -24,7 +24,7 @@ growMotif			= false
 maxK				= 13
 useFlank			= true
 flankLength			= 0					//	Flank lengths to test
-useDinuc			= false				//�	Does the model use dinuc features?	
+useDinuc			= true				//�	Does the model use dinuc features?	
 r1TestKs			= 8	//	K-mer lengths to test
 simpleSymmetry		= false
 nucSymmetry			= null				//	Nucleotide symmetry string
@@ -40,7 +40,7 @@ multiMode			= true
 uniformK			= false
 startKs				= 8, 8
 maxKs				= 8, 8
-nModes				= 3
+nModes				= 2
 useSymmetry			= false, false
 
 useSeed				= false
