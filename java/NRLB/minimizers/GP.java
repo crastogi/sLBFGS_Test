@@ -1,7 +1,13 @@
 package minimizers;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.util.Arrays;
+import java.util.concurrent.ExecutionException;
 
 import base.Array;
+import base.Model;
+import model.MultiModeModel;
 import Jama.*;
 
 public class GP {
@@ -11,6 +17,11 @@ public class GP {
 	Matrix A, G;
 	public double[] dir, T, ordT, F, Y, dY_projected, Sigmaf;
 	public double[][] X, dY, Sigmadf;
+	
+	private PrintStream outputFile;
+	private PrintStream original	= System.out;
+	public MultiModeModel model;
+	public boolean computeNRLB = true;
 
 	// Basic constructor; requires input of starting function value and scaling
 	// This allows the GP to be 'naturally scaled'
@@ -25,13 +36,18 @@ public class GP {
 	
 	// Change default c1, c2 values
 	public GP(double c1, double c2, double f0, double beta, 
-			double alpha0, double[] dir) {
+			double alpha0, double[] dir, PrintStream output, PrintStream old,
+			Model mmmodel) {
 		this.f0		= f0;
 		this.beta	= beta;
 		this.alpha0	= alpha0;
 		this.dir	= Array.clone(dir);
 		this.c1 	= c1;
 		this.c2 	= c2;
+		
+		outputFile	= output;
+		original	= old;
+		model		= (MultiModeModel) mmmodel;
 	}
 	
 	public void updateGP(double t, double[] x, double f, double[] df, 
@@ -116,22 +132,58 @@ public class GP {
 	    V0   = V(0.);
 	    Vd0  = Vd(0.);
 	    dVd0 = dVd(0.);
-	    
-//	    System.out.println("N:\t"+N);
-//	    System.out.print("T:\t");
-//	    Array.print(T);
-//	    System.out.print("Y:\t");
-//	    Array.print(Y);
-//	    System.out.print("dYproj:\t");
-//	    Array.print(dY_projected);
-//	    System.out.println("sigmaf:\t"+sigmaf);
-//	    System.out.println("sigmadf:\t"+sigmadf);
+	}
+	
+	public void dump2file() {
+		if (true) {
+			return;
+		}
+	    // Write to file
+		System.setOut(outputFile);
+    	System.out.println("====NEW GP====");
+    	System.out.println(beta);
+	    System.out.print("<N>"+N+"<T>");
+	    for (double currVal : T) {
+	    	System.out.print(currVal+",");
+	    }
+	    System.out.print("<Y>");
+	    for (double currVal : Y) {
+	    	System.out.print(currVal+",");
+	    }
+	    System.out.print("<dYproj>");
+	    for (double currVal : dY_projected) {
+	    	System.out.print(currVal+",");
+	    }
+	    System.out.print("<sigmaf>"+sigmaf);
+	    System.out.print("<sigmadf>"+sigmadf);
+	    // Compute Y-values of FULL NRLB function
+	    if (computeNRLB) {
+	    	// create x array
+	    	System.out.print("<function_pos>");
+	    	double div = Array.max(T)/100;
+	    	for (int v=0; v<101; v++) {
+	    		System.out.print(div*v+",");
+	    	}
+	    	// create function output
+	    	System.out.print("<function_val>");
+	    	for (int v=0; v<101; v++) {
+	    		try {
+	    			model.setParams(truePosition(div*v));
+					System.out.print(model.functionEval()/model.nCount+",");
+				} catch (Exception e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} 
+	    	}
+	    } 
+	    System.out.println("");
 //	    System.out.println("m0:\t"+m(0));
 //	    System.out.println("d1m:\t"+d1m(0));
 //	    for (int i=0; i<N; i++) {
 //	    	System.out.print(probWolfe(i)+"\t");
 //	    }
 //	    System.out.print("\n");
+	    System.setOut(original);
 	}
 
 	public double k(double a, double b) {
@@ -372,6 +424,9 @@ public class GP {
 	public CompactOutput makeOuts(double tt, double effEta) {
 		// First identify index of relevant output
 		int idx = Array.matchIdx(T, tt);
+		
+//		//TODO:
+//		System.out.println("; dF: "+(F[idx]-F[0])+"; sigmaF: "+sigmaf*beta);
 		
 		// Now create the CompactOutput object
 		return (new CompactOutput(X[idx], F[idx], dY[idx], Sigmaf[idx], 
