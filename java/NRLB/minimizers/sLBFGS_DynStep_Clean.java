@@ -2,19 +2,25 @@ package minimizers;
 
 import base.*;
 
-public class sLBFGS_Clean extends Minimizer{
+public class sLBFGS_DynStep_Clean extends Minimizer{
 	private boolean isVerbose;
 	private int d, N, b, bH, M, m, L, currDepth, maxEpoch;
 	private double eta, delta, fdHVPStepSize = 5E-2, dirNormBound = 10;
+	private double fFull, effEtaMean;
+    private double etaEMARate = 0.1;			// Eta EMA decay rate
+    private double etaGrowthRate = 1.005;		// effEta growth rate
+    private double maxEtaBound = 100;			// Maximum growth of eta
 	private double dirEMARate = 0.1;			// Direction EMA decay rate
 	private double maxDirGrowth = 2.718282;		// Maximum allowed dir growth rate
-	private double[] rho;
+	private double[] rho, w_k, mu_k;
 	private double[][] s, y;
 	private Fit fitOutput;
 	private Model.CompactGradientOutput fOut;
+	// Gaussian process used for evaluations
+	GP_Clean gp;
 	
 	//LBFGS object constructor; load basic minimization parameters. To be used for all subsequent minimizations using this object.
-	public sLBFGS_Clean(Model model, int gradientBatch, int hessianBatch, int memorySize, 
+	public sLBFGS_DynStep_Clean(Model model, int gradientBatch, int hessianBatch, int memorySize, 
 			int maxEpoch, int hessianPeriod, int epochIterations, double stepsize,
 			double epsilon, double delta, boolean isVerbose) {
 		this.model		= model;
@@ -46,17 +52,15 @@ public class sLBFGS_Clean extends Minimizer{
 		currDepth = 0;
 		double tStart, dirNorm, divisor, boundedDirNorm, dirNormMean = 0;
 		double maxDirBound = Math.sqrt(d)*dirNormBound;
-		double[] mu_k;						// Full gradient
-		double[] v_t;						// Variance reduced gradient
-		double[] grad_f_xt, grad_f_wk;		// Variance reduced gradient components
 		double[] dir;						// Effective gradient
-		double[] w_k, w_k_prev, x_t;		// Positions in current iterations
+		double[] w_k_prev, x_t;				// Positions in current iterations
 		// Average of path traveled in the current and previous inverse hessian updates
 		double[] u_r = new double[d], u_r_prev = new double[d];
-		double[] s_r, y_r;					// Components of two-loop update
+		double[] s_r, y_r;                  // Components of two-loop update
 		rho = new double[M];
 		s = new double[M][d];
 		y = new double[M][d];
+		GP_Clean.CompactOutput plsOut = null;
 		
 		// Deal with a potential seed and initialize
 		if (seed!=null) {
@@ -66,10 +70,10 @@ public class sLBFGS_Clean extends Minimizer{
 				throw new IllegalArgumentException("Improper seed!");
 			}
 		} else {
-			w_k = Array.scalarMultiply(Array.randomDouble(d), randomSeedScale);
+			w_k		= Array.scalarMultiply(Array.randomDouble(d), randomSeedScale);
 		}
-		fitOutput = model.generateFit(seed);
-		w_k_prev = Array.clone(w_k);
+		fitOutput	= model.generateFit(seed);
+		w_k_prev	= Array.clone(w_k);
 			
 		// Init the number of loops over data points
 		model.evaluatedDataPoints = 0;
@@ -79,10 +83,6 @@ public class sLBFGS_Clean extends Minimizer{
 			fitOutput.addStep(w_k);
 			// Compute full gradient for variance reduction
 			fOut = gradientEval(w_k, true);
-			if (k==0) {
-				dirNormMean= Array.norm(fOut.gradientVector);
-			}
-			
 			// Print some information about the current epoch
 			if (isVerbose) {
 				if (k==0) {
@@ -115,45 +115,23 @@ public class sLBFGS_Clean extends Minimizer{
 				break;			// This allows convergence to be tested on the FINAL epoch iteration without computation
 			}
 
+			fFull= fOut.functionValue;						// Assign variance reduced fVal
 			mu_k = Array.clone(fOut.gradientVector);		// Assign variance reduced gradient
-			x_t = Array.clone(w_k);							// Set x_t to current value of w_k
+			x_t  = Array.clone(w_k);						// Set x_t to current value of w_k
 			w_k_prev = Array.clone(w_k);					
-						
+			
+			// Init update steps at the first iteration
+            if (k==0) {
+            	effEtaMean = eta;
+                dirNormMean = Array.norm(mu_k);
+                u_r = Array.add(u_r, x_t);
+                plsOut = probLineSearch(x_t, fFull, mu_k, 0, Array.scalarMultiply(mu_k, 0), eta, Array.scalarMultiply(mu_k, -1.0/dirNormMean));
+           }
+			
 			// Perform m stochastic iterations before a full gradient computation takes place
 			for (int t=1; t<=m; t++) {
-				// Compute the current stochastic gradient estimate; begin by sampling a minibatch
-				model.sampleBatch(b);
-				// Next, compute the reduced variance gradient
-				grad_f_xt = stochasticEvaluate(x_t).gradientVector;
-				grad_f_wk = stochasticEvaluate(w_k).gradientVector;
-				v_t = Array.subtract(Array.add(grad_f_xt, mu_k), grad_f_wk);
-				
-				// Update u_r with current position
-				u_r = Array.add(u_r, x_t);			
-				// Compute next iteration step; condition the gradient so as not to produce rapid oscilations (extreme function values)				
-				if (r < 1) {						// Until a single hessian correction has taken place, H_0 = I
-					dir = v_t;
-				} else {							// Compute the two-loop recursion product
-					dir = twoLoopRecursion(v_t);
-				}			
-				// Bound the effective gradient update step
-				dirNorm = Array.norm(dir);
-				
-				// See if dirNorm is spiking
-				if (dirNorm > maxDirGrowth*dirNormMean && r>1) {
-					boundedDirNorm = dirNormMean;
-				} else {
-					boundedDirNorm = dirNorm;
-				}
-				// Bound gradient update
-				boundedDirNorm = Math.min(boundedDirNorm, maxDirBound);
-				// Compute exponential moving average
-				dirNormMean = dirEMARate*boundedDirNorm+(1-dirEMARate)*dirNormMean;
-				divisor = dirNorm/dirNormMean;
-				// Compute next step
-				x_t = Array.addScalarMultiply(x_t, -eta/divisor, dir);
-								
-				// Check to see if L iterations have passed (triggers hessian update)
+				// Check to see if L iterations have passed to trigger Hessian
+				// update; need to do this NOW before NEXT pls call
 				if (t % L == 0) {
 					// Increment the number of hessian correction pairs
 					r++;
@@ -170,13 +148,42 @@ public class sLBFGS_Clean extends Minimizer{
 					y_r = Array.scalarMultiply(y_r, 1.0/(2*fdHVPStepSize));
 					// Store latest values of s_r and y_r
 					add(s_r, y_r);
-										
+					
 					// Resetting u_r for next evaluation
 			        u_r_prev = Array.clone(u_r);
 			        u_r = new double[d];
 				}
+				
+				// Update u_r with current position
+				u_r = Array.add(u_r, plsOut.position);			
+				// Compute next iteration step; condition the gradient so as not to produce rapid oscilations (extreme function values)
+				if (r < 1) {						// Until a single hessian correction has taken place, H_0 = I
+					dir = plsOut.gradientVector;
+				} else {							// Compute the two-loop recursion product
+					dir = twoLoopRecursion(plsOut.gradientVector);
+					if (Double.isNaN(Array.sum(dir)) || Double.isInfinite(Array.sum(dir))) {
+						throw new Exception("Optimizer Failure: NaN encountered " +
+								"during two-loop recursion!");
+					}
+				}			
+				// Bound the effective gradient update step
+				dirNorm = Array.norm(dir);
+				
+				// See if dirNorm is spiking
+				if (dirNorm > maxDirGrowth*dirNormMean && r>1) {
+					boundedDirNorm = dirNormMean;
+				} else {
+					boundedDirNorm = dirNorm;
+				}
+				// Bound gradient update
+				boundedDirNorm = Math.min(boundedDirNorm, maxDirBound);
+				// Compute exponential moving average
+				dirNormMean = dirEMARate*boundedDirNorm+(1-dirEMARate)*dirNormMean;
+				divisor = dirNorm/dirNormMean;
+				// Compute next step using line search
+				plsOut = probLineSearch(plsOut, Array.scalarMultiply(dir, -1.0/divisor));				
 			}
-			w_k = Array.clone(x_t);
+			w_k = Array.clone(plsOut.position);
 		}
 		throw new Exception("sLBFGS Failure: maximum epochs exceeded without convergence!");
 	}
@@ -202,7 +209,7 @@ public class sLBFGS_Clean extends Minimizer{
 				Array.dotProduct(y[currDepth-1], y[currDepth-1]);
 		// r = gamma_k*q/(1 + delta*gamma_k); the denominator includes the 
 		// pseudo-hessian regularization parameter delta NOTE: There is no need 
-		// to multiply by I here, as that will anyway produce a dot product
+		// to multiply by I here, as that will anyway produce a dot product 
 		r = Array.scalarMultiply(q, gamma/(1.0 + delta*gamma));
 		
 		// Second loop (goes in reverse, starting from the earliest entry)
@@ -241,5 +248,65 @@ public class sLBFGS_Clean extends Minimizer{
 			input[i] = input[i-1];
 		}
 		input[0] = newValue;
+	}
+	
+	private GP_Clean.CompactOutput probLineSearch(GP_Clean.CompactOutput input, double[] dir) 
+			throws Exception{
+		return probLineSearch(input.position, input.functionValue, 
+				input.gradientVector, input.varF, input.varDF, input.effEta, dir);
+	}
+		
+	private GP_Clean.CompactOutput probLineSearch(double[] x0, double f0, double[] df0, 
+			double var_f0, double[] var_df0, double alpha0, double[] dir) throws Exception{
+		double f, tt, beta, zScore, tempEta;
+		double[] x_t, df = new double[d];
+		Model.CompactGradientOutput f_xt, f_wk;
+		
+		// Create new GP and update at start
+		beta		= Array.norm(df0);		// Compute scaling factor beta
+		gp 			= new GP_Clean(0, 0, f0, beta, alpha0, dir);
+		tt			= 0;
+	    gp.updateGP(tt, x0, f0, df0, var_f0, var_df0);
+		
+	    // Take unit alpha0 step
+	    model.sampleBatch(b);
+		tt		= 1.0;
+		while (true) {
+			x_t = Array.addScalarMultiply(x0, tt*alpha0, dir);
+			f_xt= stochasticEvaluate(x_t);
+			f_wk= stochasticEvaluate(w_k);
+			f	= (f_xt.functionValue + fFull) - f_wk.functionValue;
+			// Ensure that function value is NOT NaN or Inf
+			if (!(Double.isNaN(f) || Double.isInfinite(f))) {
+				break;
+			}
+			tt	= tt/10;
+			System.err.println("Readjusting tt");
+			if (tt < 1E-9) {
+				// Unable to rescue optimization; terminate
+				throw new Exception("Optimizer Failure: NaN encountered during "
+					+ "line search! Try using a smaller step size.");
+			}
+		}
+		for (int idx=0; idx<d; idx++) {
+			df[idx] = (f_xt.gradientVector[idx] + mu_k[idx]) - f_wk.gradientVector[idx];
+		}
+	    // No numerical instability; update GP
+	    gp.updateGP(tt, x_t, f, df, f_xt.varF, f_xt.varDF);
+	    
+	    // Compute effEta using alpha0 and z-score
+	    // NOTE: a negative gradient is GOOD, so we have -1*zScore
+	    zScore = gp.d1m(0)/Math.sqrt(gp.dVd(0));
+	    if (zScore>0) {
+	    	tempEta = effEtaMean*Math.pow(2, -zScore);
+	    } else {
+	    	tempEta = effEtaMean*(1+(etaGrowthRate-1)*Math.exp(zScore));
+	    }
+	    // Bound alpha
+	    tempEta = Math.min(tempEta, eta*maxEtaBound);
+	    effEtaMean = (1-etaEMARate)*effEtaMean + etaEMARate*tempEta;
+	    
+	    // Return output
+	    return gp.makeOuts(tt, effEtaMean);
 	}
 }
