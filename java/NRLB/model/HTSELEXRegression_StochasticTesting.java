@@ -827,8 +827,9 @@ public class HTSELEXRegression_StochasticTesting {
 //		return new sLBFGS(model, 500, 5000, 50, 1000, 20, 200, .03, 1E-7, 0, isVerbose);
 //		return new sLBFGS_Clean(model, 500, 5000, 50, 1000, 20, 200, .03, 1E-7, 0, isVerbose);
 //		return new sLBFGS_PLS(model, 500, 5000, 50, 1000, 20, 200, .02, 1E-7, 0, isVerbose);
+		return new sLBFGS_PLS_Clean(model, 500, 5000, 50, 1000, 20, 200, .02, 1E-7, 0, isVerbose);
 //		return new sLBFGS_DynStep(model, 500, 5000, 50, 1000, 20, 200, .02, 1E-7, 0, isVerbose);
-		return new sLBFGS_DynStep_Clean(model, 500, 5000, 50, 1000, 20, 200, .02, 1E-7, 0, isVerbose);
+//		return new sLBFGS_DynStep_Clean(model, 500, 5000, 50, 1000, 20, 200, .02, 1E-7, 0, isVerbose);
 		//return new kSVRG(model, 10, true, true, 50, 1000, .01, lbfgsConvergence, false, isVerbose);
 //		return new sLBFGS_kSVRG(model, 5, 500, 5000, 1000, 20, 50, .03, 1E-7, 0, isVerbose);
 //		return new sLBFGS_kSVRG(model, 10, 500, 2500, 1000, 5, 200, .02, lbfgsConvergence, 1E-4, isVerbose);

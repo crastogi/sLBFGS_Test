@@ -1,48 +1,35 @@
 package minimizers;
 
-import java.io.FileOutputStream;
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Random;
-
 import base.*;
 
-public class sLBFGS_PLS extends Minimizer{
-	private boolean isBracketed, isVerbose, averageSteps = false, plsVerbose = false;
+public class sLBFGS_PLS_Clean extends Minimizer{
+	private boolean isVerbose, isBracketed;
 	private int d, N, b, bH, M, m, L, currDepth, maxEpoch;
 	private int maxMCSIterations	= 10;
 	private int maxPLSIterations	= 10;
 	private double eta, delta, fdHVPStepSize = 5E-2, dirNormBound = 10;
-	private double alphaMin, alphaMax, alphaL, fL, gL, fT, gT, alphaU, fU, gU;
 	private double fFull, effEtaMean;
-	// constants for Wolfe conditions (must be chosen 0 < c1 < c2 < 1)
-	private double c1 = .0001;
-	private double c2 = .999;
+    private double etaEMARate = 0.05;			// Eta EMA decay rate
+    private double etaGrowthRate = 1.005;		// effEta growth rate
+    private double maxEtaBound = 100;			// Maximum growth of eta
+	private double dirEMARate = 0.1;			// Direction EMA decay rate
+	private double maxDirGrowth = 2.718282;		// Maximum allowed dir growth rate
+	// Parameters and constants for line search
+	private double alphaMin, alphaMax, alphaL, fL, gL, fT, gT, alphaU, fU, gU;
 	private double stepAlphaMin = 1e-20;
 	private double stepAlphaMax = 1e20;
 	private double uTol			= 1e-10;
+	private double c1 			= .0001;
+	private double c2 			= .999;
 	private double WolfeThreshold= .1;
 	private double[] rho, w_k, mu_k;
 	private double[][] s, y;
 	private Fit fitOutput;
 	private Model.CompactGradientOutput fOut;
-	// Gaussian process used for evaluations
-	GP gp;
-	
-	// Test parameters
-    boolean testNegGradStepSize		= false;
-    boolean testExceptionStepSize	= false;
-    boolean testLSFailureStepSize	= false;
-    double negGradStepSize 			= .01;
-    double exceptionStepSize		= .01;
-    double lsFailureStepSize		= .01;
-    double etaGrowthRate			= 1.005;
-    
-    PrintStream gpOutputFile, original;
-    
+	private GP_Clean gp;						// Gaussian process used for evaluations
 	
 	//LBFGS object constructor; load basic minimization parameters. To be used for all subsequent minimizations using this object.
-	public sLBFGS_PLS(Model model, int gradientBatch, int hessianBatch, int memorySize, 
+	public sLBFGS_PLS_Clean(Model model, int gradientBatch, int hessianBatch, int memorySize, 
 			int maxEpoch, int hessianPeriod, int epochIterations, double stepsize,
 			double epsilon, double delta, boolean isVerbose) {
 		this.model		= model;
@@ -70,46 +57,19 @@ public class sLBFGS_PLS extends Minimizer{
 	}
 	
 	public Fit doMinimize(double[] seed, String trajectoryFile) throws Exception {
-		boolean firstEval = true;
-		int r = 0;									// Number of currently computed Hessian correction pairs
+		int r = 0;							// # of computed Hessian correction pairs
 		currDepth = 0;
-		double tStart, dirNorm, divisor, f_t, effEta;
-		// Full gradient, variance reduced gradient, and components of variance reduced gradient
-		double[] v_t = new double[d];
-		// Effective gradient
-		double[] dir = new double[d];
-		// Positions in current iterations
-		double[] w_k_prev = new double[d], x_t = new double[d];
-		// Average of path travelled in the current and previous inverse hessian updates
+		double tStart, dirNorm, divisor, boundedDirNorm, dirNormMean = 0;
+		double maxDirBound = Math.sqrt(d)*dirNormBound;
+		double[] dir;						// Effective gradient
+		double[] w_k_prev, x_t;				// Positions in current iterations
+		// Average of path traveled in the current and previous inverse hessian updates
 		double[] u_r = new double[d], u_r_prev = new double[d];
-		// Components of two-loop update
-		double[] s_r = new double[d], y_r= new double[d];
+		double[] s_r, y_r;                  // Components of two-loop update
 		rho = new double[M];
 		s = new double[M][d];
 		y = new double[M][d];
-		// Stores the history of all previous steps in the current epoch
-		ArrayList<double[]> x_t_hist = new ArrayList<double[]>();
-		Random generator = new Random();
-		GP.CompactOutput plsOut = null;
-		Model.CompactGradientOutput f_xt, f_wk;
-		
-		// Init 
-		effEta		= eta;
-		effEtaMean	= eta;
-		w_k			= new double[d];
-		mu_k		= new double[d];
-		
-		//TODO:
-		double gNormMean = 0, dirNormMean = 0, desiredNorm = 1;
-		double gDecayRate = 1;			// Decay rate for function gradient
-		double egDecayRate= .1;			// egNorm decay rate
-		PrintStream outputFile	= new PrintStream(new FileOutputStream("/Users/chaitanya/Documents/GitWorkspaces/slbfgs/java/output/RawPath.txt"));
-		original	= System.out;
-		gpOutputFile= new PrintStream(new FileOutputStream("/Users/chaitanya/Documents/GitWorkspaces/slbfgs/java/output/GP_Path.txt"));
-		System.setOut(gpOutputFile);
-		System.out.println(c1);
-		System.out.println(c2);
-		System.setOut(original);
+		GP_Clean.CompactOutput plsOut = null;
 		
 		// Deal with a potential seed and initialize
 		if (seed!=null) {
@@ -135,10 +95,6 @@ public class sLBFGS_PLS extends Minimizer{
 			// Print some information about the current epoch
 			if (isVerbose) {
 				if (k==0) {
-					//TODO:
-					gNormMean = Array.norm(fOut.gradientVector);
-					dirNormMean= gNormMean;
-					
 					System.out.println("Starting Function Value: "+fOut.functionValue);
 					System.out.println("    Epochs   Data Loops           Likelihood       Distance Moved"+
 							"        Gradient Norm");
@@ -148,7 +104,7 @@ public class sLBFGS_PLS extends Minimizer{
 								Array.norm(fOut.gradientVector), Array.dist(w_k, xStar));	
 					} else {
 						printStep(k, model.evaluatedDataPoints/N, fOut.functionValue, Array.dist(w_k, w_k_prev), 
-								Array.norm(fOut.gradientVector), effEtaMean);	
+								Array.norm(fOut.gradientVector));	
 					}
 				}
 			}
@@ -170,46 +126,22 @@ public class sLBFGS_PLS extends Minimizer{
 
 			fFull= fOut.functionValue;						// Assign variance reduced fVal
 			mu_k = Array.clone(fOut.gradientVector);		// Assign variance reduced gradient
-			x_t  = Array.clone(w_k);							// Set x_t to current value of w_k
+			x_t  = Array.clone(w_k);						// Set x_t to current value of w_k
 			w_k_prev = Array.clone(w_k);					
 			
-			//TODO:
-			System.setOut(outputFile);
-			System.out.print(k+"\t"+m+"\t>\t\t");
-			Array.print(Array.cat(Array.cat(w_k, mu_k), Array.cat(new double[4*d], fOut.functionValue)));
-			System.setOut(original);
+			// Init update steps at the first iteration
+            if (k==0) {
+            	effEtaMean = eta;
+                dirNormMean = Array.norm(mu_k);
+                u_r = Array.add(u_r, x_t);
+                plsOut = probLineSearch(x_t, fFull, mu_k, 0, Array.scalarMultiply(mu_k, 0), eta, Array.scalarMultiply(mu_k, -1.0/dirNormMean));
+            }
 			
 			// Perform m stochastic iterations before a full gradient computation takes place
 			for (int t=1; t<=m; t++) {
-				// Need to run a different update step if it is the first eval
-				if (firstEval) { 
-					model.sampleBatch(b);
-					f_xt = stochasticEvaluate(x_t);
-					f_wk = stochasticEvaluate(w_k);
-					f_t = (f_xt.functionValue + fFull) - f_wk.functionValue;
-					v_t = Array.subtract(Array.add(f_xt.gradientVector, mu_k), f_wk.gradientVector);
-					u_r = Array.add(u_r, x_t);
-					x_t_hist.add(Array.clone(x_t));
-					dir = v_t;
-					dirNorm = Array.norm(dir);
-					divisor = 1;
-					while (dirNorm/divisor > dirNormBound) {
-						divisor *= 10;
-					}
-					plsOut = probLineSearch(x_t, f_t, v_t, f_xt.varF, f_xt.varDF, effEta, Array.scalarMultiply(dir, -1.0/divisor));
-					firstEval = false;
-					continue;
-				}
-				
-                //TODO:
-				String hessUpdate="";
-                
 				// Check to see if L iterations have passed to trigger Hessian
 				// update; need to do this NOW before NEXT pls call
 				if (t % L == 0) {
-					//TODO:
-//					System.out.println("Hessian update");
-					
 					// Increment the number of hessian correction pairs
 					r++;
 					// Finish computing u_r
@@ -226,68 +158,42 @@ public class sLBFGS_PLS extends Minimizer{
 					// Store latest values of s_r and y_r
 					add(s_r, y_r);
 					
-					//TODO
-					hessUpdate = Double.toString(Array.dist(u_r, u_r_prev));
-					
 					// Resetting u_r for next evaluation
 			        u_r_prev = Array.clone(u_r);
 			        u_r = new double[d];
 				}
 				
-				// Copy values from pls (correspond to NEXT position)
-				x_t 	= plsOut.position;
-				f_t 	= plsOut.functionValue;
-				v_t 	= plsOut.gradientVector;
-				effEta	= plsOut.effEta;
-				
-				//TODO
-				gNormMean = gDecayRate*Array.norm(v_t)+(1-gDecayRate)*gNormMean;
-				v_t = Array.scalarMultiply(v_t, gNormMean/Array.norm(v_t));
-				
 				// Update u_r with current position
-				u_r = Array.add(u_r, x_t);			
+				u_r = Array.add(u_r, plsOut.position);			
 				// Compute next iteration step; condition the gradient so as not to produce rapid oscilations (extreme function values)
-				x_t_hist.add(Array.clone(x_t));		// Need to store the history of iteration steps				
 				if (r < 1) {						// Until a single hessian correction has taken place, H_0 = I
-					dir = v_t;
+					dir = plsOut.gradientVector;
 				} else {							// Compute the two-loop recursion product
-					dir = twoLoopRecursion(v_t);
+					dir = twoLoopRecursion(plsOut.gradientVector);
+					// Check for NaNs in dir after 2loop recursion
+					if (Double.isNaN(Array.sum(dir)) || Double.isInfinite(Array.sum(dir))) {
+						throw new Exception("Optimizer Failure: NaN encountered " +
+								"during two-loop recursion!");
+					}
 				}			
 				// Bound the effective gradient update step
 				dirNorm = Array.norm(dir);
 				
-				//TODO:
-				// See if egNorm spikes
-				if (dirNorm > 2.718282*dirNormMean && r>1) {
-					desiredNorm = dirNormMean;
+				// See if dirNorm is spiking
+				if (dirNorm > maxDirGrowth*dirNormMean && r>1) {
+					boundedDirNorm = dirNormMean;
 				} else {
-					desiredNorm = dirNorm;
+					boundedDirNorm = dirNorm;
 				}
 				// Bound gradient update
-				desiredNorm = Math.min(desiredNorm, Math.sqrt(d)*dirNormBound);
+				boundedDirNorm = Math.min(boundedDirNorm, maxDirBound);
 				// Compute exponential moving average
-				dirNormMean = egDecayRate*desiredNorm+(1-egDecayRate)*dirNormMean;
+				dirNormMean = dirEMARate*boundedDirNorm+(1-dirEMARate)*dirNormMean;
 				divisor = dirNorm/dirNormMean;
-				// Run line search
-				plsOut = probLineSearch(x_t, f_t, v_t, plsOut.varF, plsOut.varDF, effEta, Array.scalarMultiply(dir, -1.0/divisor));
-				
-				//TODO: Write to file
-				System.setOut(outputFile);
-				System.out.print(k+"\t"+t+"\t\t"+hessUpdate+"\t");
-				Array.print(Array.cat(Array.cat(Array.cat(x_t, v_t), new double[2*d]), Array.cat(mu_k, Array.cat(dir, dirNorm/divisor))));
-				System.setOut(original);
+				// Compute next step using line search
+				plsOut = probLineSearch(plsOut, Array.scalarMultiply(dir, -1.0/divisor));				
 			}
-			// Choose either the last position vector x_t or a random one from the previous epoch as the starting point for the next
-			if (averageSteps) {
-				w_k = Array.clone(x_t_hist.get(0));
-				for (int currPos=1; currPos<x_t_hist.size(); currPos++) {
-					w_k = Array.add(w_k, x_t_hist.get(currPos));
-				}
-				w_k = Array.scalarMultiply(w_k, 1.0/((double) x_t_hist.size()));
-			} else {
-				w_k = Array.clone(x_t);
-			}
-			x_t_hist = new ArrayList<double[]>();
+			w_k = Array.clone(plsOut.position);
 		}
 		throw new Exception("sLBFGS Failure: maximum epochs exceeded without convergence!");
 	}
@@ -354,7 +260,13 @@ public class sLBFGS_PLS extends Minimizer{
 		input[0] = newValue;
 	}
 	
-	private GP.CompactOutput probLineSearch(double[] x0, double f0, double[] df0, 
+	private GP_Clean.CompactOutput probLineSearch(GP_Clean.CompactOutput input, double[] dir) 
+			throws Exception{
+		return probLineSearch(input.position, input.functionValue, 
+				input.gradientVector, input.varF, input.varDF, input.effEta, dir);
+	}
+		
+	private GP_Clean.CompactOutput probLineSearch(double[] x0, double f0, double[] df0, 
 			double var_f0, double[] var_df0, double alpha0, double[] dir) throws Exception{
 		boolean wolfeCrit;
 		int idx;
@@ -362,12 +274,12 @@ public class sLBFGS_PLS extends Minimizer{
 		
 		// Create new GP and update at start
 		beta		= Array.norm(df0);		// Compute scaling factor beta
-		gp 			= new GP(c1, c2, f0, beta, alpha0, dir, gpOutputFile, original, model);
+		gp 			= new GP_Clean(c1, c2, f0, beta, alpha0, dir);
 		tt			= 0;
 	    gp.updateGP(tt, x0, f0, df0, var_f0, var_df0);
 		
 		// Set new start point and loop until budget is exhausted
-		tt  		= 1;
+		tt  		= 1.0;
 		while (true) {
 		    // Begin by evaluating function and updating GP at new tt value.
 			evaluateFunction(tt);
@@ -375,21 +287,9 @@ public class sLBFGS_PLS extends Minimizer{
 		    // Next, verify that the GP gradient at the origin is negative. If 
 			// it is not, it means the GP believes the objective function is 
 			// increasing, and the gradient direction is NOT a descent 
-			// direction. Take a really small step and terminate.
+			// direction. Reset
 		    if (gp.d1m(0) > 0) {
-		        if (plsVerbose) {
-		        	System.out.print("GP detects that the current direction "
-		        			+ "is not a descent direction; taking a small step "
-		        			+ "and terminating. Number of line search "
-		        			+ "iterations: "+gp.N+"; T string: ");
-		        	Array.print(gp.T);
-		        }
-		        gp.dump2file();
-		        if (testNegGradStepSize) {
-		        	tt = eta*negGradStepSize/alpha0;
-		        } else {
-			        tt = eta/alpha0;
-		        }
+		        tt = eta/alpha0;
 		        return makeOuts(tt, true);
 		    }
 		    
@@ -413,31 +313,21 @@ public class sLBFGS_PLS extends Minimizer{
 		    		}
 		    	}
 		    }
-
-	        // See what points match Wolfe criteria, if any
+	        // If point(s) match Wolfe criteria, return optimal one
 	        if (wolfeCrit) {
-	            // Points exist that match wolfe criteria. Find optimal one
-	            if (plsVerbose) {
-	            	System.out.print("Found acceptable point. Number of line "
-	            			+ "search iterations: "+gp.N+"; Accepted T: "+
-	            			gp.T[idx]+"; T string: ");
-	            	Array.print(gp.T);
-	            }
-	            //gp.dump2file();
 	            tt = gp.T[idx];
-	            // Find the corresponding gradient and variances of optimal pt
 	            return makeOuts(tt, false); 
 	        }
 		    
-		    // Check to see if the number of line search steps has been exceeded
-	        // Testing here allows the final point to be checked for passing the
-	        // Wolfe criteria
+		    // If not, check to see if the number of line search steps has been 
+	        // exceeded; testing here allows the final point to be checked for 
+	        // passing the Wolfe criteria
 		    if (gp.N >= maxPLSIterations) {
 		    	break;
 		    }
 		    
-		    // None of the currently evaluated points are acceptable. Compute new
-		    // test point using mcsearch.
+		    // None of the currently evaluated points are acceptable. Compute a 
+		    // new test point using mcsearch on the gp.
 		    try {
 		        tt = mcsearch(Array.max(gp.T));
 		        // Check to see if tt has already been tested (occurs when an
@@ -447,61 +337,32 @@ public class sLBFGS_PLS extends Minimizer{
 		        	if (tt==Array.max(gp.T)) {
 		        		tt = Array.max(gp.T)*2;
 		        	} else {
-		        		// TODO: check to see that this is triggered sometime
-		                // Set new tt to be the average between it and the point
-		                // right of it
-		        		System.out.println("tt needs to be averaged");
+		                // New tt is the average of it and a point to the right
 		        		idx = Array.matchIdx(gp.ordT, tt);
 		                tt = (gp.ordT[idx]+gp.ordT[idx+1])/2;
-		                System.out.println("new tt value: "+tt);
-		                throw new Exception("blahhhhhh");
 		            }
 		        }
 		    } catch (Exception e) {
-		    	// An error has taken place in the line search. Exit making a 
-		    	// small step or unit step in the original direction
-		    	if (plsVerbose) {
-			    	System.err.println("MCSEARCH FAILURE!");
-			        System.err.println(e.getMessage());
-			        System.out.print("T string: ");
-			        Array.print(gp.T);		    		
-		    	}
-		    	gp.dump2file();
-		        if (testExceptionStepSize) {
-		        	tt = eta*exceptionStepSize/alpha0;
-		        } else {
-			        tt = eta/alpha0;
-		        }
+		    	// An error has taken place in the GP line search; reset
+		    	tt = eta/alpha0;
 		        return makeOuts(tt, true);
 		    }
 		}
 
-		// Algorithm reached limit without finding acceptable point; Evaluate a
-		// final time and return the "best" point (one with lowest function value)
-		// make small step or unit step?
-        if (plsVerbose) {
-        	System.out.print("Unable to find acceptable point. Number of line "
-        			+ "search iterations: "+gp.N+"; T string: ");
-        	Array.print(gp.T);
+		// Algorithm reached limit without finding acceptable point; choose 
+		// point with lowest mean
+        idx		= 1;
+        gpMean	= Double.MAX_VALUE;		// Ignore idx = 0
+        // Evaluate GP Means
+        for (int currT=2; currT<gp.N; currT++) {
+    		// Check to see if the new gpMean is lower than the old one
+    		temp		= gp.m(currT);
+    		if (temp < gpMean) {
+    			idx		= currT;		// Set to new idx
+    			gpMean	= temp;
+    		}
         }
-        gp.dump2file();
-        if (testLSFailureStepSize) {
-        	tt = eta*lsFailureStepSize/alpha0;
-        } else {
-            idx		= 1;
-            gpMean	= Double.MAX_VALUE;		// Ignore idx = 0
-            // Evaluate GP Means
-            for (int currT=2; currT<gp.N; currT++) {
-        		// Check to see if the new gpMean is lower than the old one
-        		temp		= gp.m(currT);
-        		if (temp < gpMean) {
-        			idx		= currT;		// Set to new idx
-        			gpMean	= temp;
-        		}
-            }
-    		tt = gp.T[idx];
-        }
-		// Return corresponding gradient and variances of optimal pt
+		tt = gp.T[idx];
         return makeOuts(tt, true);
 	}
 	
@@ -510,71 +371,72 @@ public class sLBFGS_PLS extends Minimizer{
 		double[] x_t, df = new double[d];
 		Model.CompactGradientOutput f_xt, f_wk;
 		
-		// Start by setting the minibatch and computing the new position
-		model.sampleBatch(b);
-		x_t		= gp.truePosition(tt);
-		// Next, compute the reduced variance function and gradient
-		f_xt	= stochasticEvaluate(x_t);
-		f_wk	= stochasticEvaluate(w_k);
-		f		= (f_xt.functionValue + fFull) - f_wk.functionValue;
+		// Loop to ensure NaNs are not encountered during evaluation
+		while (true) {
+			// Start by setting the minibatch and computing the new position
+			model.sampleBatch(b);
+			x_t = gp.truePosition(tt);
+			// Next, compute the reduced variance function and gradient
+			f_xt= stochasticEvaluate(x_t);
+			f_wk= stochasticEvaluate(w_k);
+			f	= (f_xt.functionValue + fFull) - f_wk.functionValue;
+			// Ensure that function value is NOT NaN or Inf
+			if (!(Double.isNaN(f) || Double.isInfinite(f))) {
+				break;
+			}
+			// If it is, reduce step size
+			tt	= tt/10;
+			if (tt < 1E-9) {
+				// Unable to rescue optimization; terminate
+				throw new Exception("Optimizer Failure: NaN encountered during "
+					+ "line search! Try using a smaller step size.");
+			}
+		}
+		// No numerical instability; update GP
 		for (int idx=0; idx<d; idx++) {
 			df[idx] = (f_xt.gradientVector[idx] + mu_k[idx]) - f_wk.gradientVector[idx];
 		}
-	    
-	    // Test for NaN or Inf and reset
-		if (Double.isNaN(f) || Double.isInfinite(f)) {
-			
-			System.out.println("TT: "+tt);
-			Array.print(gp.T);
-			System.out.println(f_xt);
-			System.out.println(f_wk);
-			gp.dump2file();
-			
-			throw new Exception("Optimizer Failure: NaN encountered during "
-					+ "line search! Try using a smaller step size.");
-		}
-	    
-	    // No numerical instability; update GP
 	    gp.updateGP(tt, x_t, f, df, f_xt.varF, f_xt.varDF);
 	}
 	
-	private GP.CompactOutput makeOuts(double tt, boolean resetAlpha0) throws Exception {
+	private GP_Clean.CompactOutput makeOuts(double tt, boolean resetAlpha0) throws Exception {
 		double effEta;
-		//TODO:
-		//System.out.print("alpha0: "+gp.alpha0+"; tt: "+tt+"; effStep: "+tt*gp.alpha0);
 		
-		// First, ensure that point exists
+		// First, ensure that point exists; if not, compute it
     	if (!gp.contains(tt)) {
-        	// Position does not exist, return output
         	evaluateFunction(tt);
         }
-
-		//TODO:
-//		System.out.println("--- In make_outs ---");
-//		System.out.println("tt:\t"+tt+"; alpha0:\t"+gp.alpha0);
 		
-    	// Next, compute next effective eta
+    	// Next, set eta
 		if (resetAlpha0) {
 			effEta 		= eta;
 			effEtaMean	= eta;
-//			effEtaMean	= .05*effEta + .95*effEtaMean;
-//			System.out.println(effEta+"\t"+effEtaMean);
 		} else {
 			// Compute effective eta
 			effEta = gp.alpha0*tt;
 			// Bound alpha0 to average step size if it goes out of bounds
-			if (effEta > 100*effEtaMean || effEta < .01*effEtaMean) { //
-				System.out.println("effEta Out of Bounds!: "+effEta);
+			if (effEta > 100*effEtaMean || effEta < .01*effEtaMean) { 
 				effEta = effEtaMean;
 			} else {
 				// Update effEtaMean
-				effEtaMean = .05*effEta + .95*effEtaMean*etaGrowthRate;
-				effEtaMean = Math.min(effEtaMean, eta*100);
+				effEtaMean = (1-etaEMARate)*effEtaMean*etaGrowthRate + etaEMARate*effEta;
+				effEtaMean = Math.min(effEtaMean, eta*maxEtaBound);
 				effEta = effEtaMean;
 			}
 		}
 		
-		// Finally, create output
+//    	// Next, set eta
+//		if (resetAlpha0) {
+//			effEtaMean	= eta;
+//		} else {
+//			tempEta = gp.alpha0*tt;
+//			// Update eta mean if current step size does not go out of bounds 
+//			if (tempEta <= 100*effEtaMean && tempEta >= .01*effEtaMean) { 
+//				effEtaMean = (1-etaEMARate)*effEtaMean*etaGrowthRate + etaEMARate*tempEta;
+//				effEtaMean = Math.min(effEtaMean, eta*maxEtaBound);
+//			}
+//		}
+		// Finally, create output, ensuring next step size is smoothed eta
 		return gp.makeOuts(tt, effEta);
 	}
 	
@@ -585,14 +447,14 @@ public class sLBFGS_PLS extends Minimizer{
 		
 		// Check to see if guess alphaT is within bounds
 		if (alphaT<stepAlphaMin || alphaT>stepAlphaMax) {
-			throw new Exception("Line search failure: initial step alpha guess out of bounds!");
+			throw new Exception("GP Line search failure: initial step alpha guess out of bounds!");
 		}
 		// Initialize variables and see if search direction is a descent 
 		// direction; x0 is implicitly set to 0
 		f0				= gp.m(0);
 		g0				= gp.d1m(0);
 		if (g0 > 0) {
-			throw new Exception("Line search failure: the search direction is not a descent direction!");
+			throw new Exception("GP Line search failure: the search direction is not a descent direction!");
 		}
 		alphaL			= 0;
 		fL				= f0;
@@ -621,10 +483,10 @@ public class sLBFGS_PLS extends Minimizer{
 			fTTest = f0+alphaT*c1*g0;
 			if (alphaT==stepAlphaMax && (fT-fTTest<=0 && gT-c1*g0<0)) {
 				// \psi(\alpha_t) \leq 0 and \psi^'(\alpha_t) < 0
-				throw new ArithmeticException("Line search failure: search terminated, step alpha at maximum!");
+				throw new ArithmeticException("GP Line search failure: search terminated, step alpha at maximum!");
 			} else if (alphaT==stepAlphaMin && (fT-fTTest>0 || gT-c1*g0>=0)) {
 				// \psi(\alpha_t) > 0 and \psi^'(\alpha_t) \geq 0
-				throw new ArithmeticException("Line search failure: search terminated, optimal step alpha is lower than minimum!");
+				throw new ArithmeticException("GP Line search failure: search terminated, optimal step alpha is lower than minimum!");
 			} if (fT-fTTest<=0 && Math.abs(gT)<=c2*Math.abs(g0)) {
 				//converged under strong Wolfe conditions
 				return alphaT;
@@ -660,16 +522,15 @@ public class sLBFGS_PLS extends Minimizer{
 			currIntWidth = alphaMax-alphaMin;
 			//Check to see that the interval is larger than uTol (machine precision)
 			if (isBracketed && currIntWidth<=uTol*alphaMax) {
-				throw new Exception("Line search failure: The relative width of the interval of uncertainty is less than uTol!");
+				throw new Exception("GP Line search failure: The relative width of the interval of uncertainty is less than uTol!");
 			}
-			//If unusual termination is about to occur, let alphaT be the lowest point found so far
+			//If unusual termination occurs, extrapolate from largest point
 			if ( (isBracketed && (alphaT<=alphaMin || alphaT>=alphaMax)) || nLSEvals>=maxMCSIterations-1) {
-				System.err.println("UNUSUAL TERMINATION!");	
-				alphaT = Array.max(gp.T)*2;		// extrapolation step
+				alphaT = Array.max(gp.T)*2;	
 				return alphaT;
 			}
 		}
-		throw new ArithmeticException("Line search failure: number of line search function calls exceeded maximum!");
+		throw new ArithmeticException("GP Line search failure: number of line search function calls exceeded maximum!");
 	}
 	
 	private double mcstep(double alphaLM, double fLM, double gLM, double alphaTM, double fTM, double gTM, 
@@ -680,7 +541,7 @@ public class sLBFGS_PLS extends Minimizer{
 		
 		if (gLM*(alphaTM-alphaLM)>=0.0) {
 			//Violates Theorem 2.1
-			throw new ArithmeticException("Line search failure: Interval cannot contain a minimizer!");
+			throw new ArithmeticException("GP Line search failure: Interval cannot contain a minimizer!");
 		}
 		
 		//Case 1: Higher function value. Corresponds with case U1

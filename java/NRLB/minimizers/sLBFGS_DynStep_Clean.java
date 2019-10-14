@@ -16,8 +16,7 @@ public class sLBFGS_DynStep_Clean extends Minimizer{
 	private double[][] s, y;
 	private Fit fitOutput;
 	private Model.CompactGradientOutput fOut;
-	// Gaussian process used for evaluations
-	GP_Clean gp;
+	private GP_Clean gp;						// Gaussian process used for evaluations
 	
 	//LBFGS object constructor; load basic minimization parameters. To be used for all subsequent minimizations using this object.
 	public sLBFGS_DynStep_Clean(Model model, int gradientBatch, int hessianBatch, int memorySize, 
@@ -126,7 +125,7 @@ public class sLBFGS_DynStep_Clean extends Minimizer{
                 dirNormMean = Array.norm(mu_k);
                 u_r = Array.add(u_r, x_t);
                 plsOut = probLineSearch(x_t, fFull, mu_k, 0, Array.scalarMultiply(mu_k, 0), eta, Array.scalarMultiply(mu_k, -1.0/dirNormMean));
-           }
+            }
 			
 			// Perform m stochastic iterations before a full gradient computation takes place
 			for (int t=1; t<=m; t++) {
@@ -161,6 +160,7 @@ public class sLBFGS_DynStep_Clean extends Minimizer{
 					dir = plsOut.gradientVector;
 				} else {							// Compute the two-loop recursion product
 					dir = twoLoopRecursion(plsOut.gradientVector);
+					// Check for NaNs in dir after 2loop recursion
 					if (Double.isNaN(Array.sum(dir)) || Double.isInfinite(Array.sum(dir))) {
 						throw new Exception("Optimizer Failure: NaN encountered " +
 								"during two-loop recursion!");
@@ -269,9 +269,9 @@ public class sLBFGS_DynStep_Clean extends Minimizer{
 	    gp.updateGP(tt, x0, f0, df0, var_f0, var_df0);
 		
 	    // Take unit alpha0 step
-	    model.sampleBatch(b);
-		tt		= 1.0;
+		tt  		= 1.0;
 		while (true) {
+		    model.sampleBatch(b);
 			x_t = Array.addScalarMultiply(x0, tt*alpha0, dir);
 			f_xt= stochasticEvaluate(x_t);
 			f_wk= stochasticEvaluate(w_k);
@@ -281,7 +281,6 @@ public class sLBFGS_DynStep_Clean extends Minimizer{
 				break;
 			}
 			tt	= tt/10;
-			System.err.println("Readjusting tt");
 			if (tt < 1E-9) {
 				// Unable to rescue optimization; terminate
 				throw new Exception("Optimizer Failure: NaN encountered during "
