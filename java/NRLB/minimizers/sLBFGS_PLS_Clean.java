@@ -9,7 +9,7 @@ public class sLBFGS_PLS_Clean extends Minimizer{
 	private int maxPLSIterations	= 10;
 	private double eta, delta, fdHVPStepSize = 5E-2, dirNormBound = 10;
 	private double fFull, effEtaMean;
-    private double etaEMARate = 0.05;			// Eta EMA decay rate
+    private double etaEMARate = 0.1;			// Eta EMA decay rate
     private double etaGrowthRate = 1.005;		// effEta growth rate
     private double maxEtaBound = 100;			// Maximum growth of eta
 	private double dirEMARate = 0.1;			// Direction EMA decay rate
@@ -406,7 +406,6 @@ public class sLBFGS_PLS_Clean extends Minimizer{
     	if (!gp.contains(tt)) {
         	evaluateFunction(tt);
         }
-		
     	// Next, set eta
 		if (resetAlpha0) {
 			effEta 		= eta;
@@ -424,18 +423,7 @@ public class sLBFGS_PLS_Clean extends Minimizer{
 				effEta = effEtaMean;
 			}
 		}
-		
-//    	// Next, set eta
-//		if (resetAlpha0) {
-//			effEtaMean	= eta;
-//		} else {
-//			tempEta = gp.alpha0*tt;
-//			// Update eta mean if current step size does not go out of bounds 
-//			if (tempEta <= 100*effEtaMean && tempEta >= .01*effEtaMean) { 
-//				effEtaMean = (1-etaEMARate)*effEtaMean*etaGrowthRate + etaEMARate*tempEta;
-//				effEtaMean = Math.min(effEtaMean, eta*maxEtaBound);
-//			}
-//		}
+
 		// Finally, create output, ensuring next step size is smoothed eta
 		return gp.makeOuts(tt, effEta);
 	}
