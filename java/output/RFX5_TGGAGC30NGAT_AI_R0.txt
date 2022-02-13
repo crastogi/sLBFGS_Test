@@ -1,0 +1,25 @@
+*******************
+* FIT INFORMATION *
+*******************
+Sequencing Run Name:    RFX5_TGGAGC30NGAT_AI
+Training Sample Name:   NA	Counts: 114887
+Training File Location: /Users/chaitanya/Documents/Research/SELEX/MultinomialPaper/ModelComparisons/DeepBind/AUROC/HT-SELEX Data/RFX5_TGGAGC30NGAT_AI.tsv
+Testing Sample Name:    NA	Counts: 57249
+Testing File Location:  NA
+Length:                 30
+Left Flank Sequence:    ATCTGGAGC
+Right Flank Sequence:   GATATCGTA
+Minimizer Type:         LBFGS with MC Search
+Memory Depth:           200		Maximum Iterations: 2500			Convergence Criteria: 1.0E-7
+Fit Time:               2019/07/18 14:42:04
+*******************
+*   FIT RESULTS   *
+*******************
+-------------------
+k:	2	Flank=TRUE
+Run Time:		     0.005s	Fitting Steps: 12	Function Calls: 14
+Train Likelihood:	4748265.535335725	Per Read: 41.32987662081633	Adjusted: 29.68389186905065
+Test Likelihood:	2366157.4471119936	Adjusted: 30.38150813481372
+
+Raw Beta Values:
+0.0	-0.0815332935490331	-0.189342815030704	-0.18421485755108857	-0.08480402410030483	-0.08530960157154788	-0.21238583335363093	-0.2542210492072995	-0.1951523393432629	-0.13891652607984345	-0.34643746034387046	-0.3062277911579147	-0.16606616649469963	-0.35248288961630647	-0.22298873079874612	-0.28734640976514264	
