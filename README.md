@@ -1,5 +1,7 @@
 # Stochastic LBFGS
 
+*NOTE*: This ALSO contains hacked versions of NRLB to design and test new versions of sLBFGS
+
 This repository contains code to reproduce some of the experiments published in the paper
 "A Linearly-Convergent Stochastic L-BFGS Algorithm" (see http://arxiv.org/abs/1508.02087).
 To run it, you need Julia v0.3 and the following packages installed:
