@@ -1,23 +1,3 @@
 # Stochastic LBFGS
 
-*NOTE*: This ALSO contains hacked versions of NRLB to design and test new versions of sLBFGS
-
-This repository contains code to reproduce some of the experiments published in the paper
-"A Linearly-Convergent Stochastic L-BFGS Algorithm" (see http://arxiv.org/abs/1508.02087).
-To run it, you need Julia v0.3 and the following packages installed:
-
-- Regression
-- SVM
-- Optim
-- ArrayViews
-- DataStructures
-- DataFrames
-- ArgParse
-- HDF5
-
-The adult dataset can be obtained from
-https://archive.ics.uci.edu/ml/machine-learning-databases/adult/
-
-You need to put the adult.data file into the working directory.
-
-Some example parameters can be found in the file `experiments/adult.sh`.
+This repository contains test code that combines the sLBFGS method "A Linearly-Convergent Stochastic L-BFGS Algorithm" (see http://arxiv.org/abs/1508.02087) with different line search/step size methods, which include "k-SVRG: Variance Reduction for Large Scale Optimization (see https://arxiv.org/abs/1805.00982)" and "Probabilistic Line Searches for Stochastic Optimization" (see https://jmlr.org/papers/volume18/17-049/17-049.pdf). This test code allows the different optimization strategies to be run on a hacked version of the NRLB algorithm (Rastogi et al., PNAS 2018) and see their performance on a complex, high-condition number "real" machine learning problem.
